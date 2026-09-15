@@ -1,0 +1,221 @@
+---
+import ImageFrame from "@/components/ImageFrame.astro";
+import { placeholderPhotos } from "@/lib/placeholder-photos";
+import type { GalleryBlock } from "@/lib/gallery-blocks";
+
+interface Props {
+  blocks: GalleryBlock[];
+}
+
+const { blocks } = Astro.props;
+---
+
+<div class="work-gallery">
+  {
+    blocks.map((block) => {
+      if (block.type === "duo") {
+        return (
+          <div class={`gallery-block gallery-block--duo gallery-block--split-${block.split ?? "even"}`} data-reveal>
+            <div class="gallery-block__duo-item">
+              <ImageFrame
+                src={placeholderPhotos[block.left.mediaKey]}
+                alt={block.left.alt}
+                ratio={block.left.ratio}
+                focalX={block.left.focalX}
+                focalY={block.left.focalY}
+                class="media-hover"
+              />
+            </div>
+            <div class="gallery-block__duo-item">
+              <ImageFrame
+                src={placeholderPhotos[block.right.mediaKey]}
+                alt={block.right.alt}
+                ratio={block.right.ratio}
+                focalX={block.right.focalX}
+                focalY={block.right.focalY}
+                class="media-hover"
+              />
+            </div>
+          </div>
+        );
+      }
+
+      const modifier = block.type === "offset" ? `offset offset--${block.side}` : block.type;
+
+      return (
+        <div class={`gallery-block gallery-block--${modifier}`} data-reveal>
+          <ImageFrame
+            src={placeholderPhotos[block.image.mediaKey]}
+            alt={block.image.alt}
+            ratio={block.image.ratio}
+            focalX={block.image.focalX}
+            focalY={block.image.focalY}
+            class="media-hover"
+          />
+        </div>
+      );
+    })
+  }
+</div>
+
+<style>
+  .work-gallery {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .gallery-block {
+    width: 100%;
+  }
+
+  /* FULL — the tightest rhythm: images that read as one continuous
+     wide sweep, close to their neighbours. */
+  .gallery-block--full {
+    margin-block: var(--space-4);
+  }
+
+  /* CENTERED / LARGE — the generous-breathing-room moments. */
+  .gallery-block--centered {
+    margin-block: var(--space-16);
+    margin-inline: auto;
+  }
+
+  .gallery-block--large {
+    margin-block: var(--space-20);
+    margin-inline: auto;
+  }
+
+  /* OFFSET — shifted, asymmetric margins, never centered. */
+  .gallery-block--offset {
+    margin-block: var(--space-8);
+  }
+
+  /* DUO — a close pair. */
+  .gallery-block--duo {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+    margin-block: var(--space-6);
+  }
+
+  .gallery-block__duo-item {
+    flex: 1;
+  }
+
+  @media (min-width: 375px) {
+    /* mobile-only inset/full-bleed variation so the sequence doesn't
+       read as one monotonous column (Brief 003, section 19) — full
+       bleeds past the container gutter, others stay inset. */
+    .gallery-block--full {
+      margin-inline: calc(-1 * var(--container-gutter));
+      width: calc(100% + 2 * var(--container-gutter));
+    }
+
+    .gallery-block--centered {
+      width: 84%;
+    }
+
+    .gallery-block--large {
+      width: 94%;
+    }
+
+    .gallery-block--offset.offset--left {
+      padding-right: var(--space-8);
+    }
+
+    .gallery-block--offset.offset--right {
+      padding-left: var(--space-8);
+    }
+
+    .gallery-block--duo {
+      flex-direction: column;
+    }
+
+    .gallery-block--duo .gallery-block__duo-item:first-child {
+      width: 88%;
+    }
+
+    .gallery-block--duo .gallery-block__duo-item:last-child {
+      width: 88%;
+      margin-left: auto;
+    }
+  }
+
+  @media (min-width: 768px) {
+    /* Tablet: duo becomes a real 2-column row (never stacked), offsets
+       shrink but stay asymmetric, full-bleed goes back to the
+       container's own width (section 18). */
+    .gallery-block--full {
+      margin-inline: 0;
+      width: 100%;
+    }
+
+    .gallery-block--centered {
+      width: 62%;
+    }
+
+    .gallery-block--large {
+      width: 76%;
+    }
+
+    .gallery-block--offset {
+      width: 78%;
+    }
+
+    .gallery-block--offset.offset--left {
+      margin-right: auto;
+      padding-right: 0;
+    }
+
+    .gallery-block--offset.offset--right {
+      margin-left: auto;
+      padding-left: 0;
+    }
+
+    .gallery-block--duo {
+      flex-direction: row;
+      gap: var(--space-6);
+    }
+
+    .gallery-block--duo .gallery-block__duo-item {
+      width: auto;
+      margin: 0;
+    }
+
+    .gallery-block--split-left-heavy .gallery-block__duo-item:first-child {
+      flex: 7;
+    }
+    .gallery-block--split-left-heavy .gallery-block__duo-item:last-child {
+      flex: 5;
+    }
+
+    .gallery-block--split-right-heavy .gallery-block__duo-item:first-child {
+      flex: 5;
+    }
+    .gallery-block--split-right-heavy .gallery-block__duo-item:last-child {
+      flex: 7;
+    }
+
+    .gallery-block--split-even .gallery-block__duo-item {
+      flex: 1;
+    }
+  }
+
+  @media (min-width: 1024px) {
+    .gallery-block--centered {
+      width: 56%;
+    }
+
+    .gallery-block--large {
+      width: 68%;
+    }
+
+    .gallery-block--offset {
+      width: 70%;
+    }
+
+    .gallery-block--duo {
+      gap: var(--space-8);
+    }
+  }
+</style>
