@@ -41,7 +41,7 @@ work_items
   updated_at
 ```
 
-**Point à trancher avant Phase 4 (non tranché dans la mise à jour du 15 septembre 2026) :** ce modèle ne porte pas de champ d'autorisation de publication équivalent à `publication_rights_confirmed` (section 21 du Master Brief original), alors que les mariages/portraits/événements montrent des personnes identifiables. Recommandation : ajouter un tel champ à `work_items` (et le garder pour `testimonials`), avec le même garde-fou de publication que dans le brief initial. Ce n'est pas acté ici — c'est un point à valider explicitement avant l'implémentation du modèle de données.
+**Résolu en Phase 4 (Brief 009) — voir `docs/decisions/ADR-011-publication-rights-model.md`.** Le garde-fou de publication ne porte pas un champ séparé sur `work_items`/`testimonials`, mais référence `media.publication_rights_confirmed` (une seule confirmation par fichier, quel que soit son usage) et le fait respecter à la publication (FR/EN indépendamment) via un trigger D1. Voir `docs/DATA_ARCHITECTURE.md` et `docs/drafts/001_initial.sql`.
 
 ## Médiathèque
 

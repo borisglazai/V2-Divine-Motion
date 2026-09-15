@@ -12,5 +12,5 @@
 - Le module CMS « Projets » disparaît comme nœud principal (voir `docs/CMS_SPEC.md`).
 - Pas de route publique `/travail/[slug]` au MVP (voir `docs/INFORMATION_ARCHITECTURE.md`).
 - Simplifie l'éditeur visuel : un seul module de curation plutôt qu'un CRUD projet + galerie imbriquée.
-- Le garde-fou « autorisation de publication » (section 21 du Master Brief original) doit être reporté sur `work_items` (et `testimonials`) — **point non tranché** dans la mise à jour, à valider en Phase 4 (voir `docs/CMS_SPEC.md`).
+- Le garde-fou « autorisation de publication » (section 21 du Master Brief original) est reporté sur `work_items` (et `testimonials`) via une référence à `media.publication_rights_confirmed` — résolu en Phase 4, voir `docs/decisions/ADR-011-publication-rights-model.md`.
 - Toute documentation antérieure faisant de « Projects » le cœur du MVP est superseded par cet ADR ; voir la note de mise à jour en tête de `docs/MASTER_BRIEF.md` et `docs/ONBOARDING_REVIEW.md`.

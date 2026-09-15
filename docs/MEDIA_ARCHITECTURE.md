@@ -14,7 +14,7 @@ Upload haute résolution (~24 Mpx testé) via un mécanisme d'upload direct séc
 
 ## Métadonnées (D1)
 
-Par média : alt FR/EN, point focal (`focal_x`, `focal_y`), dimensions, poids, date, catégorie, utilisation (référencé par `work_items`, `services`, `testimonials`, contenu de page).
+Par média : alt FR/EN, point focal (`focal_x`, `focal_y`), dimensions, poids, date, catégorie, utilisation (référencé par `work_items`, `services`, `testimonials`, contenu de page), `processing_status` (pending/uploaded/processing/ready/failed/abandoned), et autorisation de publication (`publication_rights_confirmed`, `publication_rights_note`, `publication_rights_confirmed_at`) — voir `docs/decisions/ADR-011-publication-rights-model.md` pour le modèle complet (droits au niveau média, garde-fou appliqué à chaque usage public). Schéma détaillé : `docs/DATA_ARCHITECTURE.md` et `docs/drafts/001_initial.sql`.
 
 ## Suppression
 

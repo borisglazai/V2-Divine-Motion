@@ -3,7 +3,7 @@
 Ce document a été mis à jour pour refléter les décisions produit/UX/design finalisées après l'Onboarding Review. Le texte original du brief (ci-dessous, section 0 et suivantes) reste conservé tel quel pour traçabilité, conformément au principe « pas de modification silencieuse » (section 78). Les points suivants le remplacent ou le précisent explicitement :
 
 - **Sections 11 et 14-15 (Architecture publique / Page Travail / Projet individuel) — REMPLACÉES.** Le MVP n'est plus construit autour d'un modèle « Projects » avec pages individuelles. La page Travail devient une **vitrine éditoriale curatée** : Médiathèque → Sélection de médias → Page Travail. Les pages projet individuelles sont retirées du MVP. Voir `docs/decisions/ADR-003-curated-work-vs-project-model.md`, `docs/CMS_SPEC.md` et `docs/INFORMATION_ARCHITECTURE.md`.
-- **Sections 40-41 (Modèle Projet / Galerie projet) — REMPLACÉES** par le modèle conceptuel `work_items` documenté dans `docs/CMS_SPEC.md`. Le schéma définitif reste à trancher en Phase 4, y compris un point non résolu : l'équivalent du garde-fou « autorisation de publication » (section 21 ci-dessous) n'a pas encore été reporté sur `work_items`.
+- **Sections 40-41 (Modèle Projet / Galerie projet) — REMPLACÉES** par le modèle `work_items` documenté dans `docs/CMS_SPEC.md` et détaillé dans `docs/DATA_ARCHITECTURE.md` (Phase 4, Brief 009). Le garde-fou « autorisation de publication » (section 21 ci-dessous) est reporté sur `work_items`/`testimonials` — voir `docs/decisions/ADR-011-publication-rights-model.md`.
 - **Section 22 (Design System, couleurs) — REMPLACÉE.** Direction visuelle validée : **Dark Editorial**. Palette de référence dans `docs/DESIGN_SYSTEM.md`.
 - **Section 23 (Typographie) — PRÉCISÉE.** Première combinaison à tester : Instrument Serif (display) + Manrope (interface), encore challengeable en finalisation Phase 2. La logique (serif = émotion, sans-serif = information) reste la règle durable.
 - **Section 28 (Architecture admin) — REMPLACÉE.** Le module « Projets » n'est plus central. Nouvelle arborescence CMS : Dashboard, Modifier le site, Travail, Médias, Services, Témoignages, Contenu (Accueil/À propos/Contact), SEO, Paramètres. Voir `docs/CMS_SPEC.md`.
@@ -327,7 +327,7 @@ Un projet ne doit idéalement pas pouvoir être publié tant que cette autorisat
 
 Le CMS n'a pas besoin de devenir un système de contrat ; il doit simplement éviter les publications accidentelles.
 
-> **Point ouvert** — ce garde-fou doit être reporté sur le modèle `work_items` (et `testimonials`), ce qui n'a pas encore été acté explicitement dans la mise à jour du 15 septembre 2026. Voir `docs/CMS_SPEC.md`.
+> **Résolu en Phase 4** — ce garde-fou est reporté sur `work_items` et `testimonials` via une référence à `media.publication_rights_confirmed`, appliquée à la publication par un trigger D1. Voir `docs/decisions/ADR-011-publication-rights-model.md`.
 
 ## 22. DESIGN SYSTEM
 
