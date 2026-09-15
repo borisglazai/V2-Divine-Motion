@@ -19,7 +19,14 @@ const links: { id: PageId; label: string }[] = [
 ];
 ---
 
-<div id="mobile-nav" class="mobile-nav" hidden>
+<div
+  id="mobile-nav"
+  class="mobile-nav"
+  hidden
+  role="dialog"
+  aria-modal="true"
+  aria-label={copy.menuOpen}
+>
   <div class="mobile-nav__panel">
     <div class="mobile-nav__top">
       <span class="mobile-nav__wordmark">{copy.siteName}</span>
@@ -33,7 +40,7 @@ const links: { id: PageId; label: string }[] = [
       </button>
     </div>
 
-    <nav class="mobile-nav__links" aria-label={copy.nav.work}>
+    <nav class="mobile-nav__links" aria-label={copy.mainNavLabel}>
       <ul>
         {
           links.map((link) => (
@@ -136,11 +143,49 @@ const links: { id: PageId; label: string }[] = [
   const openButton = document.getElementById("mobile-nav-open");
   const closeButton = document.getElementById("mobile-nav-close");
 
+  const FOCUSABLE_SELECTOR =
+    'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+  // Everything outside the panel (skip link, header, main, footer) must be
+  // neither reachable by Tab nor exposed to assistive tech while the panel
+  // is open — `inert` covers both in one step.
+  function setBackgroundInert(isInert: boolean) {
+    if (!nav) return;
+    for (const el of Array.from(document.body.children)) {
+      if (el === nav) continue;
+      if (isInert) {
+        el.setAttribute("inert", "");
+      } else {
+        el.removeAttribute("inert");
+      }
+    }
+  }
+
+  // Keep Tab/Shift+Tab cycling inside the panel itself.
+  function trapFocus(event: KeyboardEvent) {
+    if (!nav) return;
+    const focusable = Array.from(
+      nav.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR),
+    );
+    if (focusable.length === 0) return;
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  }
+
   function openNav() {
     if (!nav) return;
     nav.hidden = false;
     openButton?.setAttribute("aria-expanded", "true");
     document.body.style.overflow = "hidden";
+    setBackgroundInert(true);
     closeButton?.focus();
   }
 
@@ -149,6 +194,7 @@ const links: { id: PageId; label: string }[] = [
     nav.hidden = true;
     openButton?.setAttribute("aria-expanded", "false");
     document.body.style.overflow = "";
+    setBackgroundInert(false);
     openButton?.focus();
   }
 
@@ -156,8 +202,11 @@ const links: { id: PageId; label: string }[] = [
   closeButton?.addEventListener("click", closeNav);
 
   document.addEventListener("keydown", (event) => {
-    if (event.key === "Escape" && nav && !nav.hidden) {
+    if (!nav || nav.hidden) return;
+    if (event.key === "Escape") {
       closeNav();
+    } else if (event.key === "Tab") {
+      trapFocus(event);
     }
   });
 </script>

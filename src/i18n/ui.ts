@@ -13,6 +13,7 @@ export const ui = {
     },
     langSwitchLabel: "EN",
     langSwitchAria: "Passer au site en anglais",
+    mainNavLabel: "Navigation principale",
     menuOpen: "Menu",
     menuClose: "Fermer",
     cta: {
@@ -48,6 +49,7 @@ export const ui = {
     },
     langSwitchLabel: "FR",
     langSwitchAria: "Switch to the French site",
+    mainNavLabel: "Main navigation",
     menuOpen: "Menu",
     menuClose: "Close",
     cta: {
