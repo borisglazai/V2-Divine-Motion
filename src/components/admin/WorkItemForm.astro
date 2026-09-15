@@ -1,0 +1,199 @@
+---
+import type { MediaRow } from "@/lib/db/types";
+import MediaPickerField from "./MediaPickerField.astro";
+import type { WorkItemFormErrors } from "@/lib/admin/validation";
+
+interface Values {
+  mediaId?: number | null;
+  category?: string | null;
+  position?: number;
+  ratio?: string;
+  captionFr?: string | null;
+  captionEn?: string | null;
+  altFr?: string;
+  altEn?: string;
+  focalX?: number;
+  focalY?: number;
+  isVisible?: boolean;
+  featuredOnHome?: boolean;
+}
+
+interface Props {
+  action: string;
+  submitLabel: string;
+  media: MediaRow[];
+  values?: Values;
+  errors?: WorkItemFormErrors;
+}
+
+const { action, submitLabel, media, values = {}, errors = {} } = Astro.props;
+const v = {
+  category: values.category ?? "",
+  position: values.position ?? 1,
+  ratio: values.ratio ?? "4/5",
+  captionFr: values.captionFr ?? "",
+  captionEn: values.captionEn ?? "",
+  altFr: values.altFr ?? "",
+  altEn: values.altEn ?? "",
+  focalX: values.focalX ?? 50,
+  focalY: values.focalY ?? 50,
+  isVisible: values.isVisible ?? true,
+  featuredOnHome: values.featuredOnHome ?? false,
+};
+---
+
+<form method="POST" action={action} class="work-item-form" novalidate>
+  <MediaPickerField media={media} selectedId={values.mediaId ?? null} error={errors.mediaId} />
+
+  <div class="work-item-form__grid">
+    <div class="field">
+      <label for="category">Catégorie</label>
+      <select id="category" name="category" aria-invalid={errors.category ? "true" : undefined} aria-describedby={errors.category ? "category-error" : undefined}>
+        <option value="" selected={v.category === ""}>— Aucune —</option>
+        <option value="wedding" selected={v.category === "wedding"}>Mariage</option>
+        <option value="portrait" selected={v.category === "portrait"}>Portrait</option>
+        <option value="event" selected={v.category === "event"}>Événement</option>
+      </select>
+      {errors.category && <p class="field__error" id="category-error" role="alert">{errors.category}</p>}
+    </div>
+
+    <div class="field">
+      <label for="position">Position</label>
+      <input id="position" name="position" type="number" min="1" step="1" value={v.position} aria-invalid={errors.position ? "true" : undefined} aria-describedby={errors.position ? "position-error" : undefined} required />
+      {errors.position && <p class="field__error" id="position-error" role="alert">{errors.position}</p>}
+    </div>
+
+    <div class="field">
+      <label for="ratio">Ratio (largeur/hauteur)</label>
+      <input id="ratio" name="ratio" type="text" placeholder="4/5" value={v.ratio} aria-invalid={errors.ratio ? "true" : undefined} aria-describedby={errors.ratio ? "ratio-error" : undefined} required />
+      {errors.ratio && <p class="field__error" id="ratio-error" role="alert">{errors.ratio}</p>}
+    </div>
+
+    <div class="field">
+      <label for="focalX">Point focal — horizontal (0-100)</label>
+      <input id="focalX" name="focalX" type="number" min="0" max="100" step="1" value={v.focalX} aria-invalid={errors.focalX ? "true" : undefined} aria-describedby={errors.focalX ? "focalX-error" : undefined} />
+      {errors.focalX && <p class="field__error" id="focalX-error" role="alert">{errors.focalX}</p>}
+    </div>
+
+    <div class="field">
+      <label for="focalY">Point focal — vertical (0-100)</label>
+      <input id="focalY" name="focalY" type="number" min="0" max="100" step="1" value={v.focalY} aria-invalid={errors.focalY ? "true" : undefined} aria-describedby={errors.focalY ? "focalY-error" : undefined} />
+      {errors.focalY && <p class="field__error" id="focalY-error" role="alert">{errors.focalY}</p>}
+    </div>
+  </div>
+
+  <div class="field">
+    <label for="altFr">Alt texte — FR</label>
+    <input id="altFr" name="altFr" type="text" value={v.altFr} aria-invalid={errors.altFr ? "true" : undefined} aria-describedby={errors.altFr ? "altFr-error" : undefined} required />
+    {errors.altFr && <p class="field__error" id="altFr-error" role="alert">{errors.altFr}</p>}
+  </div>
+
+  <div class="field">
+    <label for="altEn">Alt texte — EN</label>
+    <input id="altEn" name="altEn" type="text" value={v.altEn} aria-invalid={errors.altEn ? "true" : undefined} aria-describedby={errors.altEn ? "altEn-error" : undefined} required />
+    {errors.altEn && <p class="field__error" id="altEn-error" role="alert">{errors.altEn}</p>}
+  </div>
+
+  <div class="field">
+    <label for="captionFr">Légende — FR (facultative)</label>
+    <input id="captionFr" name="captionFr" type="text" value={v.captionFr} />
+  </div>
+
+  <div class="field">
+    <label for="captionEn">Légende — EN (facultative)</label>
+    <input id="captionEn" name="captionEn" type="text" value={v.captionEn} />
+  </div>
+
+  <div class="work-item-form__checkboxes">
+    <label class="checkbox-field">
+      <input type="checkbox" name="isVisible" checked={v.isVisible} />
+      Visible sur le site
+    </label>
+    <label class="checkbox-field">
+      <input type="checkbox" name="featuredOnHome" checked={v.featuredOnHome} />
+      Mis en avant sur l'accueil
+    </label>
+  </div>
+
+  <button type="submit" class="work-item-form__submit">{submitLabel}</button>
+</form>
+
+<style>
+  .work-item-form {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-6);
+    max-width: 40rem;
+  }
+
+  .work-item-form__grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(12rem, 1fr));
+    gap: var(--space-4);
+  }
+
+  .field {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+  }
+
+  .field label {
+    font-size: var(--text-small);
+    color: var(--color-text-secondary);
+  }
+
+  .field input,
+  .field select {
+    background: var(--color-surface-admin);
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-sm);
+    color: var(--color-text-primary);
+    padding: var(--space-2) var(--space-3);
+    min-height: 2.75rem;
+    font-size: var(--text-body);
+  }
+
+  .field input[aria-invalid="true"],
+  .field select[aria-invalid="true"] {
+    border-color: #c2554b;
+  }
+
+  .field__error {
+    color: #e08a80;
+    font-size: var(--text-small);
+  }
+
+  .work-item-form__checkboxes {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+  }
+
+  .checkbox-field {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    font-size: var(--text-body);
+    color: var(--color-text-primary);
+    min-height: 2.75rem;
+  }
+
+  .checkbox-field input {
+    width: 1.25rem;
+    height: 1.25rem;
+  }
+
+  .work-item-form__submit {
+    align-self: flex-start;
+    background: var(--color-accent-warm);
+    color: var(--color-bg-primary);
+    border: none;
+    border-radius: var(--radius-sm);
+    padding: var(--space-3) var(--space-6);
+    font-size: var(--text-body);
+    font-weight: 600;
+    cursor: pointer;
+    min-height: 2.75rem;
+  }
+</style>

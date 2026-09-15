@@ -1,0 +1,109 @@
+---
+export const prerender = false;
+import AdminLayout from "@/layouts/AdminLayout.astro";
+import ImageFrame from "@/components/ImageFrame.astro";
+import Heading from "@/components/Heading.astro";
+import Text from "@/components/Text.astro";
+import { getDb } from "@/lib/db/client";
+import * as work from "@/lib/db/work";
+
+// Brief 013 §15/§34: admin-only preview of the DRAFT state (or the
+// published state if there's no open draft), so an admin can see a
+// curation change before publishing — never the public route
+// (src/pages/travail.astro stays on mock data, see §35-36). no-store /
+// noindex already apply to this response via src/middleware.ts, same as
+// every other /admin/** route — no separate mechanism needed here.
+const identity = Astro.locals.adminIdentity!;
+const idParam = Number(Astro.params.id);
+if (!Number.isInteger(idParam) || idParam <= 0) {
+  return new Response("Not found.", { status: 404 });
+}
+
+const db = getDb();
+const row = await work.getWorkItem(db, idParam);
+if (!row) {
+  return new Response("Not found.", { status: 404 });
+}
+
+const draft = row.status === "draft" ? row : await work.getWorkItemDraft(db, row.id);
+const previewRow = draft ?? row;
+const isDraftPreview = draft !== null;
+---
+
+<AdminLayout activeId="work" title={`Aperçu — élément #${idParam}`} identity={identity}>
+  <p class:list={["preview-banner", { "preview-banner--draft": isDraftPreview }]} role="status">
+    {isDraftPreview ? "APERÇU BROUILLON — non publié, visible uniquement ici." : "Aperçu de la version publiée."}
+  </p>
+
+  <div class="preview-card">
+    <ImageFrame
+      src="/mock/placeholder.svg"
+      alt={previewRow.alt_fr}
+      ratio={previewRow.ratio}
+      focalX={previewRow.focal_x}
+      focalY={previewRow.focal_y}
+      class="preview-card__image"
+    />
+    <div class="preview-card__meta">
+      <Heading level={2} size="h3">Légende FR</Heading>
+      <Text>{previewRow.caption_fr || "—"}</Text>
+      <Heading level={2} size="h3">Caption EN</Heading>
+      <Text>{previewRow.caption_en || "—"}</Text>
+      <Text size="small" tone="secondary">Alt FR : {previewRow.alt_fr}</Text>
+      <Text size="small" tone="secondary">Alt EN : {previewRow.alt_en}</Text>
+      <Text size="small" tone="secondary">
+        Catégorie : {previewRow.category ?? "—"} · Visible : {previewRow.is_visible ? "oui" : "non"} · Mis en avant
+        sur l'accueil : {previewRow.featured_on_home ? "oui" : "non"}
+      </Text>
+    </div>
+  </div>
+
+  <a class="preview-back" href={`/admin/work/${idParam}`}>&larr; Retour à l'édition</a>
+</AdminLayout>
+
+<style>
+  .preview-banner {
+    padding: var(--space-3) var(--space-4);
+    border-radius: var(--radius-sm);
+    font-size: var(--text-small);
+    font-weight: 600;
+    margin-bottom: var(--space-6);
+    background: color-mix(in srgb, var(--color-text-secondary) 15%, transparent);
+    color: var(--color-text-primary);
+  }
+
+  .preview-banner--draft {
+    background: color-mix(in srgb, var(--color-accent-warm) 18%, transparent);
+    color: var(--color-accent-warm);
+  }
+
+  .preview-card {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: var(--space-6);
+    max-width: 40rem;
+  }
+
+  .preview-card__image {
+    max-width: 24rem;
+  }
+
+  .preview-card__meta {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+  }
+
+  .preview-back {
+    display: inline-block;
+    margin-top: var(--space-8);
+    color: var(--color-text-secondary);
+    font-size: var(--text-small);
+  }
+
+  @media (min-width: 768px) {
+    .preview-card {
+      grid-template-columns: 24rem 1fr;
+    }
+  }
+</style>

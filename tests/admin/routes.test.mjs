@@ -186,3 +186,30 @@ test("a direct request bypassing any frontend JS still fails — no page-level e
   const response = await fetch(`${BASE_URL}/admin`, { redirect: "manual" });
   assert.ok([401, 403].includes(response.status));
 });
+
+// Implementation Brief 013 — CMS Travail introduces the first mutation
+// (POST) endpoints under /admin. src/middleware.ts's pathname check
+// (`startsWith("/admin")`) already covers them structurally, but this
+// proves it empirically in the same production-mode preview as the rest
+// of this suite: the DEV-only bypass (src/lib/auth/guard.ts) that would
+// let a mutation through without a real Cloudflare Access JWT is, same as
+// for GET pages, compiled out of this build entirely.
+test("a mutation route (POST /admin/work/create) with no JWT is blocked before reaching any DAL/mutation logic", async () => {
+  const response = await fetch(`${BASE_URL}/admin/work/create`, {
+    method: "POST",
+    headers: { Origin: BASE_URL, "Content-Type": "application/x-www-form-urlencoded" },
+    body: "mediaId=1&position=1&ratio=4/5&altFr=a&altEn=a",
+    redirect: "manual",
+  });
+  assert.ok([401, 403].includes(response.status), `expected 401/403, got ${response.status}`);
+  assert.equal(response.headers.get("cache-control"), "no-store");
+});
+
+test("a same-origin POST to a mutation route still fails without a JWT — a valid Origin never substitutes for auth", async () => {
+  const response = await fetch(`${BASE_URL}/admin/work/1/publish`, {
+    method: "POST",
+    headers: { Origin: BASE_URL },
+    redirect: "manual",
+  });
+  assert.ok([401, 403].includes(response.status));
+});

@@ -1,0 +1,44 @@
+---
+import type { Flash } from "@/lib/admin/flash";
+
+interface Props {
+  flash: Flash | null;
+}
+
+const { flash } = Astro.props;
+---
+
+{
+  flash && (
+    <p class:list={["flash-message", `flash-message--${flash.level}`]} role={flash.level === "success" ? "status" : "alert"}>
+      {flash.message}
+    </p>
+  )
+}
+
+<style>
+  .flash-message {
+    padding: var(--space-4);
+    border-radius: var(--radius-md);
+    border: var(--border-width) solid var(--color-border);
+    font-size: var(--text-small);
+    margin-bottom: var(--space-6);
+  }
+
+  .flash-message--success {
+    border-color: var(--color-accent-warm);
+    color: var(--color-text-primary);
+  }
+
+  .flash-message--warning {
+    border-color: var(--color-accent-warm);
+    color: var(--color-text-primary);
+    background: color-mix(in srgb, var(--color-accent-warm) 10%, transparent);
+  }
+
+  .flash-message--error {
+    border-color: #c2554b;
+    color: var(--color-text-primary);
+    background: color-mix(in srgb, #c2554b 12%, transparent);
+  }
+</style>

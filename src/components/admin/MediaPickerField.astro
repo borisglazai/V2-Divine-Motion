@@ -1,0 +1,136 @@
+---
+/**
+ * Read-only media picker (Implementation Brief 013 §12/§29/§30) — no
+ * upload, built on the existing `listMedia()` DAL read. Callers filter
+ * the list to `processing_status === 'ready'` before passing it in (see
+ * src/pages/admin/work/new.astro / [id].astro), so this component never
+ * needs to know about upload lifecycle states itself.
+ *
+ * No R2/Cloudflare Images pipeline exists yet (ADR-005/ADR-006 still
+ * open) — every thumbnail uses the same neutral placeholder graphic
+ * already established for mock frontend media
+ * (public/mock/placeholder.svg), never an invented CDN URL.
+ */
+import type { MediaRow } from "@/lib/db/types";
+import ImageFrame from "@/components/ImageFrame.astro";
+
+interface Props {
+  media: MediaRow[];
+  selectedId?: number | null;
+  error?: string;
+}
+
+const { media, selectedId = null, error } = Astro.props;
+---
+
+<fieldset class="media-picker">
+  <legend>Média</legend>
+  {error && (
+    <p class="media-picker__error" id="mediaId-error" role="alert">
+      {error}
+    </p>
+  )}
+  <div class="media-picker__list" role="radiogroup" aria-describedby={error ? "mediaId-error" : undefined}>
+    {
+      media.map((item) => (
+        <label class:list={["media-picker__item", { "is-selected": item.id === selectedId }]}>
+          <input type="radio" name="mediaId" value={item.id} checked={item.id === selectedId} required />
+          <ImageFrame
+            src="/mock/placeholder.svg"
+            alt=""
+            ratio="1 / 1"
+            class="media-picker__thumb"
+          />
+          <span class="media-picker__meta">
+            <span class="media-picker__filename">{item.original_filename ?? item.storage_key}</span>
+            <span class="media-picker__dims">
+              {item.width && item.height ? `${item.width} × ${item.height}` : "Dimensions inconnues"}
+            </span>
+            {item.publication_rights_confirmed !== 1 && (
+              <span class="media-picker__rights-badge">Droits non confirmés — publication bloquée</span>
+            )}
+          </span>
+        </label>
+      ))
+    }
+    {media.length === 0 && <p class="media-picker__empty">Aucun média disponible (prêt, non supprimé).</p>}
+  </div>
+</fieldset>
+
+<style>
+  .media-picker {
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-md);
+    padding: var(--space-4);
+  }
+
+  .media-picker legend {
+    font-size: var(--text-small);
+    color: var(--color-text-secondary);
+    padding-inline: var(--space-2);
+  }
+
+  .media-picker__error {
+    color: #e08a80;
+    font-size: var(--text-small);
+    margin-bottom: var(--space-2);
+  }
+
+  .media-picker__list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr));
+    gap: var(--space-3);
+    max-height: 22rem;
+    overflow-y: auto;
+  }
+
+  .media-picker__item {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    padding: var(--space-2);
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+  }
+
+  .media-picker__item.is-selected {
+    border-color: var(--color-accent-warm);
+    background: color-mix(in srgb, var(--color-accent-warm) 8%, transparent);
+  }
+
+  .media-picker__item input {
+    align-self: flex-start;
+  }
+
+  .media-picker__thumb {
+    width: 100%;
+  }
+
+  .media-picker__meta {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+  }
+
+  .media-picker__filename {
+    font-size: var(--text-small);
+    color: var(--color-text-primary);
+    word-break: break-all;
+  }
+
+  .media-picker__dims {
+    font-size: var(--text-micro);
+    color: var(--color-text-secondary);
+  }
+
+  .media-picker__rights-badge {
+    font-size: var(--text-micro);
+    color: var(--color-accent-warm);
+  }
+
+  .media-picker__empty {
+    color: var(--color-text-secondary);
+    font-size: var(--text-small);
+  }
+</style>

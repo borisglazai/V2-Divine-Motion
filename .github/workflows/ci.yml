@@ -63,3 +63,12 @@ jobs:
 
       - name: D1 + DAL tests
         run: npm run db:test
+
+      # CMS Travail (Implementation Brief 013). work-validation.test.ts is
+      # pure (no D1). work-endpoints.test.ts calls the real
+      # src/lib/admin/work-actions.ts functions against their own isolated
+      # local D1 via the same Miniflare harness as the DAL suite
+      # (tests/dal/harness.ts) — independent of the "Migrate local D1"
+      # step above, kept sequential only for clearer failure attribution.
+      - name: CMS Travail tests
+        run: npm run test:cms:work

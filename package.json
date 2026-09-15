@@ -19,8 +19,9 @@
     "db:test:invariants": "node --test tests/db/invariants.test.mjs",
     "db:test:dal": "node --import tsx --test tests/dal/dal.test.ts",
     "db:test": "npm run db:test:invariants && npm run db:test:dal",
-    "test:auth": "node --import tsx --test tests/auth/access.test.ts",
-    "test:admin": "node --test tests/admin/routes.test.mjs"
+    "test:auth": "node --import tsx --test tests/auth/access.test.ts tests/auth/mutation.test.ts",
+    "test:admin": "node --test tests/admin/routes.test.mjs",
+    "test:cms:work": "node --import tsx --test tests/admin/work-validation.test.ts tests/admin/work-endpoints.test.ts"
   },
   "dependencies": {
     "@astrojs/cloudflare": "^14.3.1",

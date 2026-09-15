@@ -1,0 +1,56 @@
+---
+export const prerender = false;
+import AdminLayout from "@/layouts/AdminLayout.astro";
+import WorkItemForm from "@/components/admin/WorkItemForm.astro";
+import { getDb } from "@/lib/db/client";
+import * as media from "@/lib/db/media";
+import { readFormRedirect } from "@/lib/admin/formRedirect";
+
+const identity = Astro.locals.adminIdentity!;
+const readyMedia = (await media.listMedia(getDb())).filter((m) => m.processing_status === "ready");
+
+const { errors, values } = readFormRedirect(Astro.url);
+const prefill = {
+  mediaId: values.mediaId ? Number(values.mediaId) : null,
+  category: values.category ?? null,
+  position: values.position ? Number(values.position) : undefined,
+  ratio: values.ratio,
+  captionFr: values.captionFr ?? null,
+  captionEn: values.captionEn ?? null,
+  altFr: values.altFr,
+  altEn: values.altEn,
+  focalX: values.focalX ? Number(values.focalX) : undefined,
+  focalY: values.focalY ? Number(values.focalY) : undefined,
+  isVisible: values.isVisible === "on",
+  featuredOnHome: values.featuredOnHome === "on",
+};
+---
+
+<AdminLayout activeId="work" title="Nouvel élément — Travail" identity={identity}>
+  <p class="new-work__note">
+    Créer un élément commence toujours par un brouillon — rien n'est jamais publié automatiquement.
+  </p>
+  {errors.form && (
+    <p class="new-work__form-error" role="alert">
+      {errors.form}
+    </p>
+  )}
+  <WorkItemForm action="/admin/work/create" submitLabel="Créer le brouillon" media={readyMedia} errors={errors} values={prefill} />
+</AdminLayout>
+
+<style>
+  .new-work__note {
+    color: var(--color-text-secondary);
+    font-size: var(--text-small);
+    margin-bottom: var(--space-6);
+    max-width: 40rem;
+  }
+
+  .new-work__form-error {
+    color: #e08a80;
+    padding: var(--space-4);
+    border: var(--border-width) solid #c2554b;
+    border-radius: var(--radius-md);
+    margin-bottom: var(--space-6);
+  }
+</style>

@@ -62,3 +62,27 @@ Sauvegarder en brouillon → Prévisualiser (desktop/tablette/mobile) → Publie
 ## Socle admin + coque CMS (Implementation Brief 012)
 
 L'arborescence admin ci-dessus existe désormais comme surface réelle, protégée par Cloudflare Access (JWT vérifié cryptographiquement côté serveur — voir `docs/ADMIN_SECURITY.md`) : `/admin` (Dashboard, lecture D1 réelle via `getAdminDashboardSummary`), puis `/admin/site`, `/admin/work`, `/admin/media`, `/admin/services`, `/admin/testimonials`, `/admin/content`, `/admin/seo`, `/admin/settings` — ces huit derniers sont des placeholders « Module en préparation », sans CRUD, sans upload, sans Visual Editor. Un futur Brief CMS construira chaque module (en commençant vraisemblablement par Travail, cohérent avec le reste de cette spec) sur cette même fondation DAL + auth.
+
+## CMS Travail — premier module réel (Implementation Brief 013)
+
+`/admin/work` n'est plus un placeholder : c'est le premier module CMS complet, prouvant le cycle `D1 → admin → draft → preview → publish` avant tout autre module. Aucun upload R2 (hors scope, voir Brief 014+) — la sélection média se fait exclusivement parmi les médias déjà `ready` via `listMedia()` (`src/components/admin/MediaPickerField.astro`), sans miniature réelle (pas de pipeline R2/Cloudflare Images — placeholder visuel neutre déjà établi, `public/mock/placeholder.svg`).
+
+**Routes** (`src/pages/admin/work/`) :
+```text
+GET  /admin/work                       liste (publiés + brouillons)
+GET  /admin/work/new                   formulaire de création
+GET  /admin/work/:id                   édition (:id = ligne publiée OU brouillon)
+GET  /admin/work/:id/preview           aperçu admin-only du brouillon (ou publié si aucun brouillon)
+POST /admin/work/create
+POST /admin/work/:id/save              :id = brouillon (créé automatiquement si absent — §13)
+POST /admin/work/:id/publish           :id = brouillon
+POST /admin/work/:id/delete-draft      :id = brouillon
+POST /admin/work/:id/language-status   :id = ligne PUBLIÉE (fr_status/en_status)
+POST /admin/work/reorder               brouillons uniquement — voir DATA_ARCHITECTURE.md
+```
+
+**Édition = toujours un brouillon.** Ouvrir un item publié réutilise son brouillon déjà ouvert ou en crée un (`createWorkItemDraft`/`getWorkItemDraft`, nouveau dans `src/lib/db/work.ts`) — jamais d'écriture directe sur la ligne publiée. « Enregistrer » n'affecte jamais le site public ; seul « Publier » (bouton séparé, DAL `publishWorkItem`) le fait, avec instantané automatique. Publier le contenu et publier une langue (FR/EN, `language-status`) restent deux actions distinctes, exactement comme la DAL les a conçues (Brief 011).
+
+**Réordonnancement** : draft-safe uniquement (`reorderWorkItemDrafts`, Review 011A) — voir `docs/DATA_ARCHITECTURE.md` "Réordonnancement" pour la limitation de publication groupée, non résolue dans ce brief par choix explicite (Brief 013 §20-21).
+
+**Sécurité des mutations** : voir `docs/ADMIN_SECURITY.md` "Mutation security" et `docs/decisions/ADR-016-admin-mutation-security.md`.

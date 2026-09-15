@@ -1,0 +1,225 @@
+---
+export const prerender = false;
+import AdminLayout from "@/layouts/AdminLayout.astro";
+import WorkItemForm from "@/components/admin/WorkItemForm.astro";
+import FlashMessage from "@/components/admin/FlashMessage.astro";
+import { getDb } from "@/lib/db/client";
+import * as media from "@/lib/db/media";
+import * as work from "@/lib/db/work";
+import { readFlash } from "@/lib/admin/flash";
+import { readFormRedirect } from "@/lib/admin/formRedirect";
+
+const identity = Astro.locals.adminIdentity!;
+const idParam = Number(Astro.params.id);
+
+if (!Number.isInteger(idParam) || idParam <= 0) {
+  return new Response("Not found.", { status: 404 });
+}
+
+const db = getDb();
+const row = await work.getWorkItem(db, idParam);
+if (!row) {
+  return new Response("Not found.", { status: 404 });
+}
+
+const draft = row.status === "draft" ? row : await work.getWorkItemDraft(db, row.id);
+const publishedRow = row.status === "published" ? row : row.draft_of_id ? await work.getWorkItem(db, row.draft_of_id) : null;
+const formSource = draft ?? publishedRow ?? row;
+
+const readyMedia = (await media.listMedia(db)).filter((m) => m.processing_status === "ready");
+const flash = readFlash(Astro.url);
+const { errors } = readFormRedirect(Astro.url);
+---
+
+<AdminLayout activeId="work" title={`Élément #${idParam} — Travail`} identity={identity}>
+  <FlashMessage flash={flash} />
+
+  <p class="edit-work__note">
+    {draft
+      ? "Modification du brouillon — le site public n'est pas affecté tant que vous ne publiez pas explicitement."
+      : "Aucun brouillon ouvert : enregistrer ci-dessous en créera un automatiquement, sans rien publier."}
+  </p>
+
+  {errors.form && (
+    <p class="edit-work__form-error" role="alert">
+      {errors.form}
+    </p>
+  )}
+
+  <WorkItemForm
+    action={`/admin/work/${idParam}/save`}
+    submitLabel="Enregistrer le brouillon"
+    media={readyMedia}
+    errors={errors}
+    values={{
+      mediaId: formSource.media_id,
+      category: formSource.category,
+      position: formSource.position,
+      ratio: formSource.ratio,
+      captionFr: formSource.caption_fr,
+      captionEn: formSource.caption_en,
+      altFr: formSource.alt_fr,
+      altEn: formSource.alt_en,
+      focalX: formSource.focal_x,
+      focalY: formSource.focal_y,
+      isVisible: formSource.is_visible === 1,
+      featuredOnHome: formSource.featured_on_home === 1,
+    }}
+  />
+
+  <div class="edit-work__side-actions">
+    <a href={`/admin/work/${idParam}/preview`}>Prévisualiser</a>
+    {draft && (
+      <form method="POST" action={`/admin/work/${draft.id}/publish`}>
+        <button type="submit">Publier</button>
+      </form>
+    )}
+    {draft && (
+      <form method="POST" action={`/admin/work/${draft.id}/delete-draft`}>
+        <button type="submit" class="edit-work__danger">
+          Supprimer le brouillon
+        </button>
+      </form>
+    )}
+  </div>
+
+  {publishedRow && (
+    <section class="language-status" aria-labelledby="language-status-heading">
+      <h2 id="language-status-heading">Publication par langue</h2>
+      <p class="language-status__note">
+        Publier le contenu d'un brouillon et publier une langue sont deux actions distinctes — voir ci-dessus pour le
+        contenu, ci-dessous pour la visibilité FR/EN de la version déjà publiée.
+      </p>
+      <div class="language-status__grid">
+        <div class="language-status__lang">
+          <p>FR : <strong>{publishedRow.fr_status}</strong></p>
+          <form method="POST" action={`/admin/work/${publishedRow.id}/language-status`}>
+            <input type="hidden" name="locale" value="fr" />
+            <input type="hidden" name="status" value="published" />
+            <button type="submit" disabled={publishedRow.fr_status === "published"}>
+              Publier FR
+            </button>
+          </form>
+          <form method="POST" action={`/admin/work/${publishedRow.id}/language-status`}>
+            <input type="hidden" name="locale" value="fr" />
+            <input type="hidden" name="status" value="draft" />
+            <button type="submit" disabled={publishedRow.fr_status !== "published"}>
+              Repasser FR en brouillon
+            </button>
+          </form>
+        </div>
+        <div class="language-status__lang">
+          <p>EN : <strong>{publishedRow.en_status}</strong></p>
+          <form method="POST" action={`/admin/work/${publishedRow.id}/language-status`}>
+            <input type="hidden" name="locale" value="en" />
+            <input type="hidden" name="status" value="published" />
+            <button type="submit" disabled={publishedRow.en_status === "published"}>
+              Publier EN
+            </button>
+          </form>
+          <form method="POST" action={`/admin/work/${publishedRow.id}/language-status`}>
+            <input type="hidden" name="locale" value="en" />
+            <input type="hidden" name="status" value="draft" />
+            <button type="submit" disabled={publishedRow.en_status !== "published"}>
+              Repasser EN en brouillon
+            </button>
+          </form>
+        </div>
+      </div>
+    </section>
+  )}
+</AdminLayout>
+
+<style>
+  .edit-work__note {
+    color: var(--color-text-secondary);
+    font-size: var(--text-small);
+    margin-bottom: var(--space-6);
+    max-width: 40rem;
+  }
+
+  .edit-work__form-error {
+    color: #e08a80;
+    padding: var(--space-4);
+    border: var(--border-width) solid #c2554b;
+    border-radius: var(--radius-md);
+    margin-bottom: var(--space-6);
+  }
+
+  .edit-work__side-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-3);
+    margin-top: var(--space-6);
+  }
+
+  .edit-work__side-actions a,
+  .edit-work__side-actions button {
+    font-size: var(--text-small);
+    color: var(--color-text-primary);
+    background: none;
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-sm);
+    padding: var(--space-2) var(--space-4);
+    cursor: pointer;
+    min-height: 2.75rem;
+    text-decoration: none;
+  }
+
+  .edit-work__danger {
+    color: #e08a80;
+  }
+
+  .language-status {
+    margin-top: var(--space-12);
+    padding-top: var(--space-8);
+    border-top: var(--border-width) solid var(--color-border);
+  }
+
+  .language-status h2 {
+    font-family: var(--font-serif);
+    font-size: var(--text-h3);
+    color: var(--color-text-primary);
+    margin-bottom: var(--space-2);
+  }
+
+  .language-status__note {
+    color: var(--color-text-secondary);
+    font-size: var(--text-small);
+    max-width: 40rem;
+    margin-bottom: var(--space-6);
+  }
+
+  .language-status__grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+    gap: var(--space-6);
+  }
+
+  .language-status__lang {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+    color: var(--color-text-primary);
+  }
+
+  .language-status__lang form {
+    display: inline-block;
+  }
+
+  .language-status__lang button {
+    font-size: var(--text-small);
+    background: none;
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-sm);
+    padding: var(--space-2) var(--space-3);
+    color: var(--color-text-primary);
+    cursor: pointer;
+    min-height: 2.5rem;
+  }
+
+  .language-status__lang button:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+</style>

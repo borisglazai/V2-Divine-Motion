@@ -120,6 +120,11 @@ export async function createWorkItemDraft(
   return createDraftFromPublished(db, CONFIG, publishedId, updatedBy);
 }
 
+/** Implementation Brief 013: the CMS edit page's "open the existing draft, or offer to create one" read (§13) — thin wrapper so admin pages never reach past the DAL for this. */
+export async function getWorkItemDraft(db: D1Database, publishedId: number): Promise<WorkItemRow | null> {
+  return (await getDraftOf(db, TABLE, publishedId)) as WorkItemRow | null;
+}
+
 export async function updateWorkItemDraft(
   db: D1Database,
   draftId: number,

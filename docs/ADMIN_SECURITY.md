@@ -1,6 +1,6 @@
-# Admin Security — Divine Motion V2 (Implementation Brief 012)
+# Admin Security — Divine Motion V2 (Implementation Briefs 012-013)
 
-Documente le socle sécurisé de l'espace admin : comment `admin.divinemotion.ca` est protégé, comment le vérifier localement, et ce qui reste à faire avant le premier module CMS avec mutation (écriture).
+Documente le socle sécurisé de l'espace admin : comment `admin.divinemotion.ca` est protégé (Brief 012), comment le vérifier localement, et comment les mutations (Brief 013, CMS Travail) sont sécurisées au-delà de la lecture.
 
 ## Architecture
 
@@ -35,6 +35,8 @@ D1
 - `src/lib/auth/guard.ts` — `requireAdmin(request)`, le point d'entrée unique utilisé par le middleware. Compose `access.ts` + `env.ts`, plus le bypass DEV strict (voir plus bas).
 - `src/middleware.ts` — intercepte toute requête `/admin/**` avant qu'une page ne s'exécute ; renvoie 401 (JWT absent) ou 403 (JWT invalide/config absente) sans donnée admin, avec `Cache-Control: no-store`, `X-Robots-Tag: noindex, nofollow`, `X-Frame-Options: DENY`, `Referrer-Policy: same-origin` sur **toute** réponse `/admin`, succès ou échec.
 - `src/lib/db/admin.ts` — `getAdminDashboardSummary(db)`, la seule lecture D1 du Dashboard, via la DAL existante (aucun SQL brut dans un composant `.astro`).
+- `src/lib/auth/mutation.ts` (Brief 013) — `requireAdminMutation(request, locals)`, le point d'entrée unique pour toute route `POST` sous `/admin`. Voir "Mutation security" ci-dessous et ADR-016.
+- `src/lib/admin/work-actions.ts` (Brief 013) — la logique métier des mutations CMS Travail, `db`-injectable, appelée par les endpoints minces sous `src/pages/admin/work/`.
 
 ## Cloudflare Access — configuration réelle (à faire par la personne détenant l'accès Cloudflare)
 
@@ -59,22 +61,25 @@ Le seul bypass de ce projet : `src/lib/auth/guard.ts` court-circuite `verifyAcce
 - Il n'existe aucune variable d'environnement, en-tête ou config qui puisse rouvrir ce bypass dans un Worker déployé — ce n'est pas une condition runtime contournable, c'est du code absent du bundle de production.
 - `tests/admin/routes.test.mjs` le prouve empiriquement contre un vrai `astro build && astro preview` (mode production) : une requête `/admin` sans JWT y est bloquée (401/403), jamais un accès local silencieux.
 
-## CSRF — stratégie prévue avant le premier Brief CRUD (Brief 012 §32)
+## Mutation security (Implementation Brief 013)
 
-Ce brief est en lecture seule (Dashboard + placeholders, aucune mutation). Aucun système CSRF complet n'est construit maintenant. Stratégie prévue pour le Brief qui introduira la première mutation (Travail, Médias, etc.) :
+CMS Travail introduit les premières routes de mutation (`POST /admin/work/*`). Chacune appelle `requireAdminMutation(request, locals)` (`src/lib/auth/mutation.ts`) avant de toucher la DAL — the single helper every endpoint uses, jamais une vérification réimplémentée par route (Brief 013 §37). Il compose :
 
-- **Cloudflare Access reste la première barrière** : une mutation nécessite un JWT Access valide, exactement comme une lecture — pas de route de mutation qui contournerait `requireAdmin`.
-- **Vérification d'origine** : toute requête de mutation (POST/PATCH/DELETE) doit vérifier que l'en-tête `Origin` correspond au domaine admin attendu, rejetée sinon.
-- **Same-site** : les futurs cookies/session (s'il y en a, au-delà du JWT Access lui-même qui est géré par Cloudflare) seront `SameSite=Strict`.
-- **Pas de mutation via GET** : chaque action d'écriture est un verbe HTTP de mutation dédié, jamais un lien `GET` avec effet de bord.
-- Ce point est à réexaminer et verrouiller (ADR si nécessaire) au moment du premier Brief CMS avec écriture — actuellement une intention documentée, pas un mécanisme implémenté.
+1. **Méthode** — seules POST/PUT/PATCH/DELETE sont acceptées ; une mutation n'est jamais atteignable en GET.
+2. **Identité admin** — `locals.adminIdentity`, déjà posée par `src/middleware.ts` avant que cette fonction ne s'exécute (défense en profondeur, pas la barrière principale — le middleware bloque déjà tout `/admin/**` sans JWT valide, mutations comprises).
+3. **Origin** — voir `docs/decisions/ADR-016-admin-mutation-security.md` pour la décision complète (Option A : `Origin` strict, pas de token CSRF) et son raisonnement.
 
-## Logging (Brief 012 §33)
+Chaque endpoint (`src/pages/admin/work/**/*.ts`) délègue sa logique métier à une fonction `xxxAction(db, ...)` dans `src/lib/admin/work-actions.ts`, qui prend `db: D1Database` en paramètre explicite (même convention que `src/lib/db/*`) — c'est ce qui la rend testable sous `node --test` sans runtime Workers (voir Tests ci-dessous), le fichier endpoint lui-même restant le seul point qui appelle `getDb()`/`cloudflare:workers` et n'est donc testable qu'au travers d'un vrai Worker (`tests/admin/routes.test.mjs`).
 
-Le seul point de journalisation ajouté par ce brief (`src/pages/admin/index.astro`, erreur D1) logue au maximum `err.message` — jamais le JWT, ses claims, ou des données personnelles au-delà de ce message d'erreur générique. `src/middleware.ts` ne logue rien du tout sur un refus (le corps de réponse générique suffit ; voir §14 du brief — aucun détail exposé, ni au client ni dans les logs).
+## Logging (Brief 012 §33 / Brief 013 §28)
+
+Le seul point de journalisation ajouté par le Brief 012 (`src/pages/admin/index.astro`, erreur D1) logue au maximum `err.message` — jamais le JWT, ses claims, ou des données personnelles au-delà de ce message d'erreur générique. `src/middleware.ts` ne logue rien du tout sur un refus (le corps de réponse générique suffit). Le Brief 013 n'ajoute aucun audit log complet — les colonnes `updated_by` déjà existantes dans le schéma (remplies avec l'email de l'identité admin sur chaque mutation) suffisent pour ce MVP, conformément à sa consigne §28.
 
 ## Tests
 
 - `tests/auth/access.test.ts` — les 7 scénarios requis (JWT absent/malformé/mauvais issuer/mauvais audience/expiré/signature invalide/valide) plus des cas limites, contre un JWKS local généré pour le test (pas de dépendance réseau).
+- `tests/auth/mutation.test.ts` (Brief 013) — les 6 scénarios requis pour `requireAdminMutation`/`isSameOriginRequest` : GET sur une route de mutation, POST sans identité, POST avec un `Origin` différent, `Origin` absent, POST same-origin valide, méthodes PUT/PATCH/DELETE acceptées. Pur, aucun D1/HTTP.
 - `tests/dal/dal.test.ts` (suite « admin dashboard summary ») — `getAdminDashboardSummary` contre un vrai D1 local (Miniflare), avec cross-vérification par requêtes SQL indépendantes.
-- `tests/admin/routes.test.mjs` — preuve HTTP réelle (`astro build && astro preview`) que `/admin` et tous les placeholders sont bloqués sans JWT, avec les bons headers, sans fuite de donnée. **Limite assumée et documentée** : ne teste PAS le chemin positif « JWT Access réel valide → Dashboard » de bout en bout en HTTP, faute d'application Access réelle provisionnée (hors scope, §43). Ce chemin positif est prouvé par composition : `access.ts` (JWT valide → identité) + la suite Dashboard DAL (D1 réel) — chaque maillon est testé, seule la fusion en un unique appel HTTP ne l'est pas.
+- `tests/admin/work-validation.test.ts` (Brief 013) — validation serveur du formulaire Travail (`parseWorkItemForm`), indépendante des attributs HTML.
+- `tests/admin/work-endpoints.test.ts` (Brief 013) — les fonctions réelles de `src/lib/admin/work-actions.ts` contre un vrai D1 local isolé (même harnais Miniflare que la suite DAL) : cycle create → save → publish, édition d'un item déjà publié (brouillon auto-créé, ligne publique inchangée, instantané), suppression de brouillon, indépendance FR/EN via l'action de langue, droits de publication, isolation du réordonnancement, filtrage du sélecteur de médias (ready uniquement).
+- `tests/admin/routes.test.mjs` — preuve HTTP réelle (`astro build && astro preview`) que `/admin` et tous les placeholders sont bloqués sans JWT, avec les bons headers, sans fuite de donnée ; étendu en Brief 013 pour prouver qu'une route de mutation (`POST /admin/work/create`) est bloquée de la même façon, y compris avec un `Origin` same-origin valide (un `Origin` correct ne remplace jamais l'authentification). **Limite assumée et documentée** : ne teste PAS le chemin positif « JWT Access réel valide → mutation » de bout en bout en HTTP, faute d'application Access réelle provisionnée (hors scope, Brief 012 §43 / Brief 013 §47). Ce chemin positif est prouvé par composition : `access.ts` (JWT valide → identité) + `work-endpoints.test.ts` (la logique de mutation contre D1 réel) — chaque maillon est testé, seule la fusion en un unique appel HTTP ne l'est pas.

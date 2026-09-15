@@ -47,6 +47,22 @@ Suite dédiée (`tests/dal/dal.test.ts`, exécutée via `npm run db:test:dal`, i
 - **`tests/dal/dal.test.ts`**, suite « admin dashboard summary » (incluse dans `npm run db:test:dal`) — `getAdminDashboardSummary` contre un vrai D1 local : chaque champ cross-vérifié par une requête SQL indépendante, plus une preuve que le compte change bien quand la donnée sous-jacente change (lecture réelle, pas figée).
 - **`tests/admin/routes.test.mjs`** (`npm run test:admin`) — preuve HTTP de bout en bout contre un vrai `astro build && astro preview` (mode production) : route publique non affectée ; `/admin` sans JWT → 401/403, aucune donnée admin ni détail interne dans la réponse, `Cache-Control: no-store`/`X-Robots-Tag: noindex, nofollow`/`X-Frame-Options: DENY` ; JWT malformé → toujours refusé ; les 8 routes placeholder protégées de la même façon. **Limite assumée** : ne couvre pas le chemin positif « JWT Access réel → Dashboard » en HTTP (nécessiterait une vraie application Cloudflare Access, hors scope) — ce chemin est prouvé par composition des deux suites précédentes. Voir `docs/ADMIN_SECURITY.md`.
 
+## CMS Travail (Implementation Brief 013)
+
+- **`tests/auth/mutation.test.ts`** (inclus dans `npm run test:auth`) — les 6 scénarios requis pour `requireAdminMutation`/`isSameOriginRequest` : GET sur une route de mutation → refus ; POST sans identité admin → refus ; POST avec un `Origin` différent → refus ; `Origin` absent → refus (échec fermé) ; POST same-origin avec identité valide → autorisé ; PUT/PATCH/DELETE acceptés comme POST. Pur, aucun D1/HTTP — voir `docs/decisions/ADR-016-admin-mutation-security.md` pour la décision testée.
+- **`tests/admin/work-validation.test.ts`** (`npm run test:cms:work`) — `parseWorkItemForm` : formulaire valide accepté ; catégorie vide → `null` ; cases à cocher décochées → `false` ; champs focaux vides → 50 par défaut ; puis tous les rejets serveur indépendants du HTML — `mediaId` absent/non entier/≤0, catégorie inconnue, position non entière positive, ratio malformé, alt FR/EN manquant, focal hors 0-100, plusieurs erreurs simultanées rapportées ensemble.
+- **`tests/admin/work-endpoints.test.ts`** (`npm run test:cms:work`) — les fonctions réelles de `src/lib/admin/work-actions.ts` (celles que les endpoints Astro appellent) contre un vrai D1 local isolé (même harnais Miniflare que `tests/dal/dal.test.ts`) :
+  - **Cycle complet** — créer un brouillon → l'enregistrer → le publier (promotion en place, aucun instantané) ;
+  - **Édition d'un item déjà publié** — `save` crée automatiquement le brouillon manquant ; la ligne publique reste inchangée jusqu'à `publish` ; un instantané PRÉ-publication est créé ; le brouillon disparaît après publication ;
+  - **Suppression de brouillon** — jamais la ligne publiée ;
+  - **FR/EN** — droits de publication non confirmés → refus avec message clair (pas de SQL brut) ; droits confirmés → FR publiable, EN reste indépendant, puis EN publiable sans dépublier FR ; locale/statut invalides rejetés avant tout accès DAL ;
+  - **Réordonnancement** — l'action ne change jamais les positions publiques (isolation vérifiée), payload `orderedIds` malformé rejeté proprement ;
+  - **Sélecteur de médias** — médias supprimés/`failed`/`pending` exclus, `ready` inclus ; `createWorkItemAction` refuse lui-même un `mediaId` non utilisable même si le client contourne le sélecteur (défense en profondeur, pas seulement une UI qui cache l'option) ;
+  - **Validation** — un formulaire invalide n'appelle jamais la DAL ; un `id` inexistant renvoie un sentinel 404 propre.
+  
+  `preview.astro` n'est pas couvert ici (page Astro, pas une fonction important à isoler) — vérifié manuellement contre une session `astro dev` réelle (voir IMPLEMENTATION REPORT 013), sur les mêmes lectures (`getWorkItemDraft`/`getWorkItem`) que cette suite exerce déjà.
+- **`tests/admin/routes.test.mjs`** (`npm run test:admin`, étendu en Brief 013) — deux tests supplémentaires contre le vrai `astro build && astro preview` : une mutation (`POST /admin/work/create`) sans JWT est bloquée avant toute logique métier ; un `Origin` same-origin valide ne suffit jamais à contourner l'authentification.
+
 ## Retiré du plan de test
 
 Tout scénario de « page projet individuelle publique » (fiche projet dédiée) est retiré — hors scope MVP (voir `docs/decisions/ADR-003-curated-work-vs-project-model.md`).
