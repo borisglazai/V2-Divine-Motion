@@ -58,15 +58,17 @@ describe("schema applies", () => {
     assert.ok(!cols.includes("layout"));
   });
 
-  test("the 4 publication-rights triggers exist", () => {
+  test("the 6 publication-rights triggers exist (4 from 0001 + 2 media-change guards from 0002, CMS Work Patch 013A)", () => {
     const names = rows(
       "SELECT name FROM sqlite_master WHERE type='trigger' ORDER BY name;",
     ).map((r) => r.name);
     assert.deepEqual(names, [
       "trg_testimonials_rights_gate_en",
       "trg_testimonials_rights_gate_fr",
+      "trg_testimonials_rights_gate_media_change",
       "trg_work_items_rights_gate_en",
       "trg_work_items_rights_gate_fr",
+      "trg_work_items_rights_gate_media_change",
     ]);
   });
 });
@@ -289,6 +291,163 @@ describe("publication rights (ADR-011)", () => {
     const state = rows(`SELECT fr_status, en_status FROM testimonials WHERE id=${id};`)[0];
     assert.equal(state.fr_status, "published");
     assert.equal(state.en_status, "published");
+  });
+});
+
+// CMS Work Patch 013A: closes the gap where the 4 triggers above (all
+// `BEFORE UPDATE OF fr_status`/`en_status`) never fire when a row that is
+// ALREADY live gets its media swapped — that UPDATE doesn't touch the
+// language columns. migrations/0002 adds two more triggers, `BEFORE
+// UPDATE OF media_id`/`photo_media_id`, specifically for that case. See
+// migrations/0002_publication_rights_media_change_guard.sql and
+// docs/DATA_ARCHITECTURE.md "Publication rights — media replacement on an
+// already-live row".
+describe("publication rights — media change guard on an already-live row (0002, CMS Work Patch 013A)", () => {
+  test("work_items: changing media_id on a row with fr_status='published' to an unrighted media is blocked", () => {
+    execD1(
+      "INSERT INTO media (storage_key, mime_type, size_bytes, uploaded_at, created_at, updated_at, publication_rights_confirmed) VALUES ('media/013a-live-fr.jpg','image/jpeg',1,1,1,1,1);",
+    );
+    const rightedId = rows("SELECT id FROM media WHERE storage_key='media/013a-live-fr.jpg';")[0].id;
+    execD1(
+      "INSERT INTO media (storage_key, mime_type, size_bytes, uploaded_at, created_at, updated_at) VALUES ('media/013a-unrighted-1.jpg','image/jpeg',1,1,1,1);",
+    );
+    const unrightedId = rows("SELECT id FROM media WHERE storage_key='media/013a-unrighted-1.jpg';")[0].id;
+    execD1(
+      `INSERT INTO work_items (media_id, position, ratio, alt_fr, alt_en, fr_status, fr_published_at, created_at, updated_at) VALUES (${rightedId},1,'4/5','a','a','published',1,1,1);`,
+    );
+    const id = rows(`SELECT id FROM work_items WHERE media_id=${rightedId};`)[0].id;
+
+    const err = expectSqlError(`UPDATE work_items SET media_id=${unrightedId} WHERE id=${id};`);
+    assert.match(err, /cannot change media on a row with a live language — new media publication rights not confirmed/);
+
+    const stillRighted = rows(`SELECT media_id FROM work_items WHERE id=${id};`)[0];
+    assert.equal(stillRighted.media_id, rightedId, "the blocked update must not have applied");
+  });
+
+  test("work_items: the same change is allowed when no language is live", () => {
+    execD1(
+      "INSERT INTO media (storage_key, mime_type, size_bytes, uploaded_at, created_at, updated_at) VALUES ('media/013a-unrighted-2.jpg','image/jpeg',1,1,1,1);",
+    );
+    const unrightedId = rows("SELECT id FROM media WHERE storage_key='media/013a-unrighted-2.jpg';")[0].id;
+    execD1(
+      "INSERT INTO media (storage_key, mime_type, size_bytes, uploaded_at, created_at, updated_at) VALUES ('media/013a-draft-only.jpg','image/jpeg',1,1,1,1);",
+    );
+    const draftMediaId = rows("SELECT id FROM media WHERE storage_key='media/013a-draft-only.jpg';")[0].id;
+    // fr_status/en_status default to 'draft' — no language live yet, even though status='published' (a brand-new item promoted in place, per publishWorkItem's own preflight logic).
+    execD1(
+      `INSERT INTO work_items (media_id, position, ratio, alt_fr, alt_en, created_at, updated_at) VALUES (${draftMediaId},2,'4/5','a','a',1,1);`,
+    );
+    const id = rows(`SELECT id FROM work_items WHERE media_id=${draftMediaId};`)[0].id;
+
+    execD1(`UPDATE work_items SET media_id=${unrightedId} WHERE id=${id};`);
+    const state = rows(`SELECT media_id FROM work_items WHERE id=${id};`)[0];
+    assert.equal(state.media_id, unrightedId);
+  });
+
+  test("work_items: draft-row edits (status='draft') are never blocked by this trigger, even with a stale live fr_status copy", () => {
+    // A draft shadow row copies fr_status/en_status verbatim from its
+    // published parent at creation time (createDraftFromPublished) — this
+    // trigger must not mistake that stale copy for "this row is live"
+    // (Save Draft =/= Publish, ADR-013): only a status='published' row
+    // changing media is gated.
+    execD1(
+      "INSERT INTO media (storage_key, mime_type, size_bytes, uploaded_at, created_at, updated_at, publication_rights_confirmed) VALUES ('media/013a-parent.jpg','image/jpeg',1,1,1,1,1);",
+    );
+    const parentMediaId = rows("SELECT id FROM media WHERE storage_key='media/013a-parent.jpg';")[0].id;
+    execD1(
+      "INSERT INTO media (storage_key, mime_type, size_bytes, uploaded_at, created_at, updated_at) VALUES ('media/013a-unrighted-3.jpg','image/jpeg',1,1,1,1);",
+    );
+    const unrightedId = rows("SELECT id FROM media WHERE storage_key='media/013a-unrighted-3.jpg';")[0].id;
+    execD1(
+      `INSERT INTO work_items (media_id, position, ratio, alt_fr, alt_en, fr_status, fr_published_at, created_at, updated_at) VALUES (${parentMediaId},3,'4/5','a','a','published',1,1,1);`,
+    );
+    const publishedId = rows(`SELECT id FROM work_items WHERE media_id=${parentMediaId};`)[0].id;
+    execD1(
+      `INSERT INTO work_items (status, draft_of_id, media_id, position, ratio, alt_fr, alt_en, fr_status, created_at, updated_at) VALUES ('draft',${publishedId},${parentMediaId},3,'4/5','a','a','published',1,1);`,
+    );
+    const draftId = rows(`SELECT id FROM work_items WHERE draft_of_id=${publishedId};`)[0].id;
+
+    execD1(`UPDATE work_items SET media_id=${unrightedId} WHERE id=${draftId};`);
+    const state = rows(`SELECT media_id FROM work_items WHERE id=${draftId};`)[0];
+    assert.equal(state.media_id, unrightedId, "editing a draft's media must never be blocked by the rights gate");
+  });
+
+  test("work_items: the same change is allowed once the new media's rights are confirmed", () => {
+    execD1(
+      "INSERT INTO media (storage_key, mime_type, size_bytes, uploaded_at, created_at, updated_at, publication_rights_confirmed) VALUES ('media/013a-live-en.jpg','image/jpeg',1,1,1,1,1);",
+    );
+    const originalId = rows("SELECT id FROM media WHERE storage_key='media/013a-live-en.jpg';")[0].id;
+    execD1(
+      "INSERT INTO media (storage_key, mime_type, size_bytes, uploaded_at, created_at, updated_at) VALUES ('media/013a-to-confirm.jpg','image/jpeg',1,1,1,1);",
+    );
+    const newMediaId = rows("SELECT id FROM media WHERE storage_key='media/013a-to-confirm.jpg';")[0].id;
+    execD1(
+      `INSERT INTO work_items (media_id, position, ratio, alt_fr, alt_en, en_status, en_published_at, created_at, updated_at) VALUES (${originalId},4,'4/5','a','a','published',1,1,1);`,
+    );
+    const id = rows(`SELECT id FROM work_items WHERE media_id=${originalId};`)[0].id;
+
+    const err = expectSqlError(`UPDATE work_items SET media_id=${newMediaId} WHERE id=${id};`);
+    assert.match(err, /cannot change media on a row with a live language/);
+
+    execD1(`UPDATE media SET publication_rights_confirmed=1, publication_rights_confirmed_at=1 WHERE id=${newMediaId};`);
+    execD1(`UPDATE work_items SET media_id=${newMediaId} WHERE id=${id};`);
+    const state = rows(`SELECT media_id FROM work_items WHERE id=${id};`)[0];
+    assert.equal(state.media_id, newMediaId);
+  });
+
+  test("testimonials: changing photo_media_id on a live row to an unrighted media is blocked", () => {
+    execD1(
+      "INSERT INTO media (storage_key, mime_type, size_bytes, uploaded_at, created_at, updated_at, publication_rights_confirmed) VALUES ('media/013a-testi-live.jpg','image/jpeg',1,1,1,1,1);",
+    );
+    const rightedId = rows("SELECT id FROM media WHERE storage_key='media/013a-testi-live.jpg';")[0].id;
+    execD1(
+      "INSERT INTO media (storage_key, mime_type, size_bytes, uploaded_at, created_at, updated_at) VALUES ('media/013a-testi-unrighted.jpg','image/jpeg',1,1,1,1);",
+    );
+    const unrightedId = rows("SELECT id FROM media WHERE storage_key='media/013a-testi-unrighted.jpg';")[0].id;
+    execD1(
+      `INSERT INTO testimonials (author_name, quote_fr, quote_en, photo_media_id, position, fr_status, fr_published_at, created_at, updated_at) VALUES ('C','q','q',${rightedId},3,'published',1,1,1);`,
+    );
+    const id = rows("SELECT id FROM testimonials WHERE author_name='C';")[0].id;
+
+    const err = expectSqlError(`UPDATE testimonials SET photo_media_id=${unrightedId} WHERE id=${id};`);
+    assert.match(err, /cannot change photo on a row with a live language — new media publication rights not confirmed/);
+
+    const stillRighted = rows(`SELECT photo_media_id FROM testimonials WHERE id=${id};`)[0];
+    assert.equal(stillRighted.photo_media_id, rightedId);
+  });
+
+  test("testimonials: setting photo_media_id to NULL on a live row stays allowed", () => {
+    execD1(
+      "INSERT INTO media (storage_key, mime_type, size_bytes, uploaded_at, created_at, updated_at, publication_rights_confirmed) VALUES ('media/013a-testi-live-2.jpg','image/jpeg',1,1,1,1,1);",
+    );
+    const rightedId = rows("SELECT id FROM media WHERE storage_key='media/013a-testi-live-2.jpg';")[0].id;
+    execD1(
+      `INSERT INTO testimonials (author_name, quote_fr, quote_en, photo_media_id, position, en_status, en_published_at, created_at, updated_at) VALUES ('D','q','q',${rightedId},4,'published',1,1,1);`,
+    );
+    const id = rows("SELECT id FROM testimonials WHERE author_name='D';")[0].id;
+
+    execD1(`UPDATE testimonials SET photo_media_id=NULL WHERE id=${id};`);
+    const state = rows(`SELECT photo_media_id FROM testimonials WHERE id=${id};`)[0];
+    assert.equal(state.photo_media_id, null);
+  });
+
+  test("testimonials: changing to a rights-confirmed media on a live row is allowed", () => {
+    execD1(
+      "INSERT INTO media (storage_key, mime_type, size_bytes, uploaded_at, created_at, updated_at, publication_rights_confirmed) VALUES ('media/013a-testi-live-3.jpg','image/jpeg',1,1,1,1,1);",
+    );
+    const originalId = rows("SELECT id FROM media WHERE storage_key='media/013a-testi-live-3.jpg';")[0].id;
+    execD1(
+      "INSERT INTO media (storage_key, mime_type, size_bytes, uploaded_at, created_at, updated_at, publication_rights_confirmed) VALUES ('media/013a-testi-new-righted.jpg','image/jpeg',1,1,1,1,1);",
+    );
+    const newRightedId = rows("SELECT id FROM media WHERE storage_key='media/013a-testi-new-righted.jpg';")[0].id;
+    execD1(
+      `INSERT INTO testimonials (author_name, quote_fr, quote_en, photo_media_id, position, fr_status, fr_published_at, created_at, updated_at) VALUES ('E','q','q',${originalId},5,'published',1,1,1);`,
+    );
+    const id = rows("SELECT id FROM testimonials WHERE author_name='E';")[0].id;
+
+    execD1(`UPDATE testimonials SET photo_media_id=${newRightedId} WHERE id=${id};`);
+    const state = rows(`SELECT photo_media_id FROM testimonials WHERE id=${id};`)[0];
+    assert.equal(state.photo_media_id, newRightedId);
   });
 });
 

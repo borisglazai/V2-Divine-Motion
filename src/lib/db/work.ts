@@ -151,13 +151,57 @@ export async function deleteWorkItemDraft(db: D1Database, draftId: number): Prom
   return deleteDraft(db, TABLE, draftId);
 }
 
-/** Copies draft content onto the published row (or promotes a brand-new item). Does not touch fr_status/en_status — see setWorkItemLanguageStatus. */
+/**
+ * Copies draft content onto the published row (or promotes a brand-new
+ * item). Does not touch fr_status/en_status — see setWorkItemLanguageStatus.
+ *
+ * CMS Work Patch 013A: pre-checks publication rights on the draft's
+ * `media_id` BEFORE any SQL write, but only when the merge would actually
+ * change what a live language shows publicly — i.e. when the draft is
+ * replacing an existing published row (`draft_of_id` set) AND that
+ * published row currently has FR or EN live. A brand-new item
+ * (`draft_of_id === null`) has no live language yet, so it may still be
+ * published with unrighted media (unchanged from before this patch) —
+ * the gate is on making an unrighted media *visible*, not on curation
+ * itself. Without this, `publishWorkItem` could silently copy a new,
+ * unrighted `media_id` onto an already-live row: the BEFORE UPDATE OF
+ * fr_status/en_status triggers never fire for that merge (it doesn't
+ * touch those columns), so the only defenses were the ones this patch
+ * adds — this preflight, and migrations/0002's
+ * trg_work_items_rights_gate_media_change trigger as the last line of
+ * defense. See docs/DATA_ARCHITECTURE.md "Publication rights — media
+ * replacement on an already-live row" for the full writeup.
+ */
 export async function publishWorkItem(
   db: D1Database,
   draftId: number,
   updatedBy?: string,
 ): Promise<Result<{ publishedId: number }>> {
-  return publishDraft(db, CONFIG, draftId, { updatedBy });
+  return publishDraft(db, CONFIG, draftId, {
+    updatedBy,
+    preflight: async (draft) => {
+      const publishedId = draft.draft_of_id as number | null;
+      if (publishedId === null) return null;
+
+      const published = await db
+        .prepare(`SELECT fr_status, en_status FROM work_items WHERE id = ?`)
+        .bind(publishedId)
+        .first<{ fr_status: string; en_status: string }>();
+      if (!published) return null; // let publishDraft's own INVALID_STATE handle a missing published row
+
+      const anyLanguageLive = published.fr_status === "published" || published.en_status === "published";
+      if (!anyLanguageLive) return null;
+
+      const media = await getMedia(db, draft.media_id as number);
+      if (!media || media.publication_rights_confirmed !== 1) {
+        return {
+          code: "PUBLICATION_RIGHTS_REQUIRED",
+          message: `work_item #${publishedId}: this row has a live language — the draft's media publication rights must be confirmed before publishing`,
+        };
+      }
+      return null;
+    },
+  });
 }
 
 /**

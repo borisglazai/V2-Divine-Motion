@@ -224,6 +224,112 @@ describe("work_items: FR/EN independence and publication rights", () => {
   });
 });
 
+// CMS Work Patch 013A — the gap: `publishWorkItem` used to copy a draft's
+// `media_id` onto an already-live published row unconditionally. The
+// BEFORE UPDATE OF fr_status/en_status triggers never fire for that merge
+// (it doesn't touch those columns), so an unrighted media could become
+// publicly visible without ever tripping a language-status transition.
+// See src/lib/db/work.ts's publishWorkItem header and
+// docs/DATA_ARCHITECTURE.md "Publication rights — media replacement on an
+// already-live row".
+describe("work_items: publish blocked when replacing media on an already-live row (CMS Work Patch 013A)", () => {
+  let publishedId: number;
+  let unrightedMediaId: number;
+  let draftId: number;
+
+  test("setup: a published work_item with FR live, then a draft that swaps its media for an unrighted one", async () => {
+    const rightedMediaId = await findMediaId("media/seed-a.jpg");
+    const created = await work.createWorkItem(db, {
+      mediaId: rightedMediaId,
+      position: 60,
+      ratio: "4/5",
+      altFr: "a",
+      altEn: "a",
+    });
+    assert.equal(created.ok, true);
+    if (!created.ok) return;
+    publishedId = created.data.draftId;
+    const publishResult = await work.publishWorkItem(db, publishedId);
+    assert.equal(publishResult.ok, true);
+
+    const frResult = await work.setWorkItemLanguageStatus(db, publishedId, "fr", "published");
+    assert.equal(frResult.ok, true);
+
+    const unrighted = await media.createMediaMetadata(db, {
+      storageKey: "media/dal-013a-unrighted.jpg",
+      mimeType: "image/jpeg",
+      sizeBytes: 1000,
+    });
+    assert.equal(unrighted.ok, true);
+    if (!unrighted.ok) return;
+    unrightedMediaId = unrighted.data.id;
+
+    const draftResult = await work.createWorkItemDraft(db, publishedId);
+    assert.equal(draftResult.ok, true);
+    if (!draftResult.ok) return;
+    draftId = draftResult.data.draftId;
+
+    const updateResult = await work.updateWorkItemDraft(db, draftId, { mediaId: unrightedMediaId });
+    assert.equal(updateResult.ok, true);
+  });
+
+  test("publishWorkItem is refused with PUBLICATION_RIGHTS_REQUIRED before any SQL write; published row unchanged; draft kept", async () => {
+    const before = await work.getWorkItem(db, publishedId);
+    const result = await work.publishWorkItem(db, draftId);
+    assert.equal(result.ok, false);
+    if (!result.ok) assert.equal(result.error.code, "PUBLICATION_RIGHTS_REQUIRED");
+
+    const after = await work.getWorkItem(db, publishedId);
+    assert.equal(after!.media_id, before!.media_id, "the published row's media must be unchanged by a refused publish");
+
+    const draftStillThere = await work.getWorkItemDraft(db, publishedId);
+    assert.ok(draftStillThere, "the draft must be kept, not silently discarded");
+    assert.equal(draftStillThere!.media_id, unrightedMediaId);
+  });
+
+  test("after confirming rights, the same draft publishes successfully", async () => {
+    await media.updateMediaMetadata(db, unrightedMediaId, { publicationRightsConfirmed: true });
+    const result = await work.publishWorkItem(db, draftId);
+    assert.equal(result.ok, true);
+
+    const after = await work.getWorkItem(db, publishedId);
+    assert.equal(after!.media_id, unrightedMediaId);
+  });
+
+  test("regression: a draft replacing a published row where NO language is live may still publish unrighted media", async () => {
+    const rightedMediaId = await findMediaId("media/seed-b.jpg");
+    const created = await work.createWorkItem(db, {
+      mediaId: rightedMediaId,
+      position: 61,
+      ratio: "4/5",
+      altFr: "a",
+      altEn: "a",
+    });
+    assert.equal(created.ok, true);
+    if (!created.ok) return;
+    const noLiveId = created.data.draftId;
+    const promoteResult = await work.publishWorkItem(db, noLiveId);
+    assert.equal(promoteResult.ok, true);
+    // fr_status/en_status default to 'draft' — neither language is live.
+
+    const unrighted = await media.createMediaMetadata(db, {
+      storageKey: "media/dal-013a-no-live-unrighted.jpg",
+      mimeType: "image/jpeg",
+      sizeBytes: 1000,
+    });
+    assert.equal(unrighted.ok, true);
+    if (!unrighted.ok) return;
+
+    const draftResult = await work.createWorkItemDraft(db, noLiveId);
+    assert.equal(draftResult.ok, true);
+    if (!draftResult.ok) return;
+    await work.updateWorkItemDraft(db, draftResult.data.draftId, { mediaId: unrighted.data.id });
+
+    const publishResult = await work.publishWorkItem(db, draftResult.data.draftId);
+    assert.equal(publishResult.ok, true, "no language is live, so this merge doesn't require confirmed rights (Brief 013A §2)");
+  });
+});
+
 describe("work_items: reorder (draft-safe, Review 011A)", () => {
   let ids: number[]; // 3 published items, "A/B/C" in their current public order
 
