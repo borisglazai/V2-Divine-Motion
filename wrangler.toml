@@ -38,7 +38,7 @@ migrations_dir = "migrations"
 [[env.staging.d1_databases]]
 binding = "DB"
 database_name = "divine-motion-v2-staging"
-database_id = "REPLACE_WITH_REAL_STAGING_D1_DATABASE_ID"
+database_id = "de8bf99e-45c2-407a-b435-52148b379bf2"
 migrations_dir = "migrations"
 
 # Production is deliberately NOT declared here. No production D1 binding,
