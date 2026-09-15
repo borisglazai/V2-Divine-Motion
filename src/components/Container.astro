@@ -12,7 +12,12 @@ const { class: className, as: Tag = "div" } = Astro.props;
 </Tag>
 
 <style>
-  .container {
+  /* :where() keeps this rule's specificity at zero so a page's own
+     :global(.custom-class) override (specificity 0,1,0) always wins,
+     regardless of Astro's scope-hash attribute selector. Without this,
+     Astro appends `[data-astro-cid-x]` to `.container`, raising it to
+     0,2,0 and silently defeating every page's max-width override. */
+  :where(.container) {
     width: 100%;
     max-width: var(--container-max);
     margin-inline: auto;

@@ -4,56 +4,141 @@ import Container from "@/components/Container.astro";
 import Section from "@/components/Section.astro";
 import Heading from "@/components/Heading.astro";
 import Text from "@/components/Text.astro";
-import type { Locale } from "@/i18n/routes";
+import EditorialLink from "@/components/EditorialLink.astro";
+import ScrollReveal from "@/components/ScrollReveal.astro";
+import { getPath, type Locale } from "@/i18n/routes";
+import { privacyMock } from "@/data/mock/privacy";
 
 interface Props {
   locale: Locale;
 }
 
 const { locale } = Astro.props;
+const content = privacyMock[locale];
 
-const title = locale === "fr" ? "Confidentialité" : "Privacy";
 const description =
   locale === "fr"
-    ? "Politique de confidentialité de Divine Motion."
-    : "Divine Motion's privacy policy.";
-
-const paragraphsFr = [
-  "Cette page présente une version provisoire de la politique de confidentialité de Divine Motion, en attente du texte définitif (docs/SECURITY_PRIVACY.md).",
-  "Divine Motion collecte uniquement les renseignements nécessaires pour répondre à une demande de contact : nom, courriel, téléphone facultatif, type de prestation, date et lieu facultatifs, message.",
-  "Ces renseignements ne sont pas conservés au-delà de ce qui est nécessaire pour traiter votre demande, et ne sont jamais transmis à des tiers à des fins commerciales.",
-];
-
-const paragraphsEn = [
-  "This page shows a placeholder version of Divine Motion's privacy policy, pending the final text (docs/SECURITY_PRIVACY.md).",
-  "Divine Motion only collects the information needed to respond to a contact request: name, email, optional phone, service type, optional date and location, message.",
-  "This information is not kept longer than necessary to process your request, and is never shared with third parties for commercial purposes.",
-];
-
-const paragraphs = locale === "fr" ? paragraphsFr : paragraphsEn;
+    ? "Comment Divine Motion traite les renseignements transmis via le site."
+    : "How Divine Motion handles information shared through the site.";
 ---
 
-<BaseLayout locale={locale} pageId="privacy" title={title} description={description}>
+<BaseLayout locale={locale} pageId="privacy" title={content.title} description={description}>
+  <Section spacing="tight">
+    <Container class="privacy-hero">
+      <div data-reveal>
+        <Heading level={1} size="display">{content.title}</Heading>
+        <div class="privacy-hero__intro">
+          {content.intro.map((paragraph) => (
+            <Text as="p" size="lg" tone="secondary">
+              {paragraph}
+            </Text>
+          ))}
+        </div>
+        <Text as="p" size="small" tone="secondary" class="privacy-hero__updated">
+          {content.lastUpdated}
+        </Text>
+      </div>
+    </Container>
+  </Section>
+
   <Section>
-    <Container class="privacy">
-      <Heading level={1} size="h1">{title}</Heading>
-      <div class="privacy__paragraphs">
-        {paragraphs.map((paragraph) => <Text as="p" size="lg">{paragraph}</Text>)}
+    <Container class="privacy-content">
+      <div data-reveal>
+        {content.sections.map((section) => (
+          <div class="privacy-section" id={section.id}>
+            <Heading level={2} size="h2">
+              {section.title}
+            </Heading>
+            {section.paragraphs.map((paragraph) => (
+              <Text as="p" size="lg">
+                {paragraph}
+              </Text>
+            ))}
+            {section.bullets && (
+              <ul class="privacy-section__bullets">
+                {section.bullets.map((bullet) => (
+                  <li>{bullet}</li>
+                ))}
+              </ul>
+            )}
+          </div>
+        ))}
+      </div>
+    </Container>
+  </Section>
+
+  <Section background="secondary">
+    <Container class="privacy-content">
+      <div data-reveal>
+        <Heading level={2} size="h2">
+          {content.contactNote.title}
+        </Heading>
+        <Text as="p" size="lg" class="privacy-contact__text">
+          {content.contactNote.text}
+        </Text>
+        <EditorialLink href={getPath("contact", locale)} class="privacy-contact__link">
+          {content.contactNote.linkLabel}
+        </EditorialLink>
       </div>
     </Container>
   </Section>
 </BaseLayout>
 
+<ScrollReveal />
+
 <style>
-  /* :global() — passed to the child Container component. */
-  :global(.privacy) {
+  /* :global() — passed to child components (Container, Text, EditorialLink),
+     outside this file's own CSS scope. */
+  :global(.privacy-hero) {
     max-width: 42rem;
   }
 
-  .privacy__paragraphs {
-    margin-top: var(--space-8);
+  .privacy-hero__intro {
+    margin-top: var(--space-4);
     display: flex;
     flex-direction: column;
-    gap: var(--space-6);
+    gap: var(--space-3);
+  }
+
+  :global(.privacy-hero__updated) {
+    margin-top: var(--space-8);
+  }
+
+  /* Reading column sized in `ch` (character width) rather than rem, per
+     Implementation Brief 007 section 6's explicit 60–75 characters/line
+     requirement — a precise fit for long-form text at any body size. */
+  :global(.privacy-content) {
+    max-width: 68ch;
+  }
+
+  .privacy-section + .privacy-section {
+    margin-top: var(--space-16);
+  }
+
+  .privacy-section :global(p) {
+    margin-top: var(--space-4);
+  }
+
+  .privacy-section__bullets {
+    margin-top: var(--space-4);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+  }
+
+  .privacy-section__bullets li {
+    font-family: var(--font-sans);
+    font-size: var(--text-body);
+    color: var(--color-text-secondary);
+    padding-left: var(--space-4);
+    border-left: var(--border-width) solid var(--color-border);
+  }
+
+  :global(.privacy-contact__text) {
+    margin-top: var(--space-4);
+  }
+
+  :global(.privacy-contact__link) {
+    margin-top: var(--space-6);
   }
 </style>
