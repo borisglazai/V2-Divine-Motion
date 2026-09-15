@@ -32,7 +32,19 @@ Local, Staging (`staging.divinemotion.ca`), Production (`divinemotion.ca`, `admi
 
 ## D1 — fondation (Implementation Brief 010)
 
-`migrations/0001_initial.sql` est la migration réelle et appliquée (localement, via Wrangler) du schéma conçu dans `docs/DATA_ARCHITECTURE.md`. Aucun code applicatif ne lit encore `env.DB` — cette fondation ne connecte ni le frontend public ni un CMS ; voir `docs/DATA_ARCHITECTURE.md` et `docs/DEPLOYMENT.md` pour le détail complet (environnements, seed, tests, sauvegarde).
+`migrations/0001_initial.sql` est la migration réelle et appliquée (localement, via Wrangler) du schéma conçu dans `docs/DATA_ARCHITECTURE.md`. Voir `docs/DATA_ARCHITECTURE.md` et `docs/DEPLOYMENT.md` pour le détail complet (environnements, seed, tests, sauvegarde).
+
+## Data Access Layer (Implementation Brief 011)
+
+`src/lib/db/` — SQL explicite au-dessus de `env.DB`, pas d'ORM. Voir `docs/DATA_ARCHITECTURE.md` "Data Access Layer" pour l'architecture complète (moteur brouillon/publié partagé, convention d'erreurs, transactions D1, enfants, snapshots). Le frontend public n'y est toujours pas branché — `src/data/mock/*.ts` reste la source utilisée par les pages.
+
+**`cloudflare:workers` remplace `Astro.locals.runtime.env`.** Avec Astro 6 / `@astrojs/cloudflare` 14.x, `Astro.locals.runtime.env` a été retiré (confirmé en lisant `node_modules/@astrojs/cloudflare/dist/utils/cf-helpers.js`, qui lève explicitement une erreur avec ce message si on essaie). La seule API supportée est `import { env } from "cloudflare:workers"` — voir `src/lib/db/client.ts`, le seul fichier de ce dépôt qui y touche. Les types ambiants (`Env`, `D1Database`, le module `cloudflare:workers` lui-même) viennent de `worker-configuration.d.ts`, régénéré par `wrangler types` (câblé dans `npm run typecheck`), gitignored comme `.astro/types.d.ts` — jamais commité, jamais modifié à la main.
+
+**`D1Database.batch()` est le seul mécanisme d'atomicité.** Confirmé contre le fichier de types généré (pas de `BEGIN`/`COMMIT`, pas de transaction interactive dans l'API publique) : `batch()` exécute un tableau fixe de requêtes préparées de façon atomique, mais aucune requête ne peut lire le résultat d'une requête précédente du même appel. `INSERT ... RETURNING id` fonctionne sur D1 local (confirmé) et sert à obtenir l'id auto-généré d'une ligne juste insérée, mais reste un aller-retour séparé — voir `docs/DATA_ARCHITECTURE.md` "Transactions D1" pour l'analyse complète (ce qui est atomique dans la DAL, ce qui ne l'est délibérément pas).
+
+**`node --test` sur des fichiers `.ts` exige des imports avec extension explicite.** Le support natif de Node 22 pour exécuter du TypeScript (sans build) résout les imports relatifs à la lettre (`./types` échoue, `./types.ts` réussit) — incompatible avec la convention sans extension utilisée dans tout `src/`. `tsx` (nouvelle devDependency, utilisée uniquement par `db:test:dal`) résout les imports comme le ferait un bundler, sans qu'il faille changer le style d'import du code source lui-même.
+
+**Fichiers `src/pages/` préfixés `_`/`__` sont exclus du routage par Astro**, pas seulement masqués — une première tentative de route de smoke-test nommée `__d1-smoke-test.json.ts` renvoyait le 404 générique d'Astro (aucune route ne correspondait), pas la réponse de mon propre handler. Renommé sans le préfixe underscore (`dev-d1-smoke-test.json.ts`), avec un garde-fou `import.meta.env.DEV` comme véritable protection contre l'exposition en production — vérifié dans les deux sens (accessible sous `astro dev`, 404 sous `astro build && astro preview`).
 
 ## Sécurité
 

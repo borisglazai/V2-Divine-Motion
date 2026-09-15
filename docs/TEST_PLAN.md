@@ -26,6 +26,21 @@ Suite dédiée (`tests/db/invariants.test.mjs`, exécutée via `npm run db:test`
 
 Exécutée en CI après le build (`.github/workflows/ci.yml`), indépendamment de la suite frontend (`npm test`, qui reste scopée à `tests/routes.test.mjs`).
 
+## Data Access Layer (Implementation Brief 011)
+
+Suite dédiée (`tests/dal/dal.test.ts`, exécutée via `npm run db:test:dal`, incluse dans `npm run db:test`) contre un D1 local réel obtenu via l'API Node de Miniflare (même mécanisme que `wrangler d1 execute` en interne) — appelle directement les fonctions TypeScript de `src/lib/db/`, pas de contournement HTTP/CLI. Seedée une fois (`seeds/local.sql`) puis partagée entre les blocs de test. Couvre, en plus de la régression complète de la suite `tests/db/` (Brief 010, toujours au vert) :
+
+- **Lectures publiques** — `listPublishedServices`/`listPublishedWorkItems`/`listPublishedTestimonials`/`homeContent.getPublished`/`getSiteSettings`/`getPageSeo`, filtrage correct (langue, visibilité, actif).
+- **Isolation brouillon → publication** — testé explicitement de bout en bout sur `work_items` : modifier un brouillon ne change jamais la lecture publique ; publier copie exactement ce qui a été édité ; le brouillon est supprimé après publication.
+- **`DRAFT_ALREADY_EXISTS`** et **`NO_DRAFT`** — erreurs métier renvoyées proprement (`Result`), jamais une exception SQL brute qui remonte à l'appelant.
+- **Création + publication d'un contenu neuf** (jamais publié avant) — promotion en place, aucun instantané créé (rien à restaurer).
+- **Snapshots** — un instantané est bien créé avant chaque publication d'un contenu déjà publié, capture l'état PRÉ-publication ; 6 publications consécutives laissent exactement 5 instantanés (élagage vérifié, pas supposé).
+- **Droits de publication côté application** — `setWorkItemLanguageStatus`/`setTestimonialLanguageStatus` renvoient `PUBLICATION_RIGHTS_REQUIRED` *avant* toute requête SQL quand le média n'a pas ses droits confirmés ; la publication réussit une fois confirmés ; FR et EN restent indépendants.
+- **Isolation des tables enfants** — `service_features` (Services) et les deux enfants d'À propos (`about_story_paragraphs`, `about_approach_items`) simultanément : éditer les enfants d'un brouillon ne touche jamais les enfants de la ligne publiée avant publication.
+- **Réordonnancement** (`reorderWorkItems`) — application atomique de nouvelles positions ; un id invalide dans la liste rejette l'ensemble sans appliquer aucun changement partiel.
+- **Media** — `getMediaUsage` reflète les références réelles ; soft delete/restore.
+- **Settings/SEO** — mise à jour partielle (seuls les champs fournis changent), indépendance entre pages.
+
 ## Retiré du plan de test
 
 Tout scénario de « page projet individuelle publique » (fiche projet dédiée) est retiré — hors scope MVP (voir `docs/decisions/ADR-003-curated-work-vs-project-model.md`).

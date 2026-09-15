@@ -1,6 +1,6 @@
 # Data Architecture — Divine Motion V2
 
-**Statut :** conçu en Phase 4 (Briefs 009/009A), **implémenté en fondation D1 réelle par le Brief 010** — `migrations/0001_initial.sql` est désormais la migration réelle et appliquée (localement, via Wrangler ; voir `docs/DEPLOYMENT.md`), `docs/drafts/001_initial.sql` reste comme trace du brouillon pré-implémentation mais n'est plus la référence courante. Aucun code applicatif ne lit encore `env.DB` — voir `docs/DEPLOYMENT.md` et `docs/TEST_PLAN.md` "D1 invariants" pour l'état d'implémentation. Ce document explique le *pourquoi* du schéma ; `migrations/0001_initial.sql` est la référence exacte des colonnes/types/contraintes.
+**Statut :** conçu en Phase 4 (Briefs 009/009A), implémenté en fondation D1 réelle par le Brief 010, **et doté d'une couche d'accès aux données (DAL) typée par le Brief 011** — `src/lib/db/`. `migrations/0001_initial.sql` est la migration réelle et appliquée (localement, via Wrangler ; voir `docs/DEPLOYMENT.md`) ; `docs/drafts/001_initial.sql` reste comme trace du brouillon pré-implémentation. Le binding `DB` est désormais lu par du code applicatif réel (`src/lib/db/client.ts`, via `cloudflare:workers`), mais aucune page publique n'y est encore branchée — le frontend continue de lire `src/data/mock/*.ts` (voir "Data Access Layer" ci-dessous). Ce document explique le *pourquoi* du schéma ; `migrations/0001_initial.sql` est la référence exacte des colonnes/types/contraintes.
 
 **Décisions verrouillées par la Review 009A** (voir ADR-013, ADR-014, ADR-015) : mécanisme brouillon/publié unique pour tout contenu public éditable (`work_items`/`services`/`testimonials` inclus, plus de règle hybride) ; aucune colonne `layout`/`blockType` en D1 pour Travail ou Services ; aucune table de soumission de contact.
 
@@ -223,3 +223,45 @@ Reste à couvrir en Phase 5 (contre un vrai D1, pas seulement SQLite jetable) : 
 Le modèle applique désormais un mécanisme brouillon/publié unique et sans exception, conforme à *Save Draft ≠ Publish*, verrouille la séparation D1/frontend pour Travail et Services, retire le stockage de soumissions de contact, et simplifie le cycle d'upload média. Toutes les décisions structurantes que le rapport 009 avait laissées en recommandation sont désormais verrouillées par ADR. Aucune implémentation D1 n'a été faite.
 
 **DATA MODEL READY FOR IMPLEMENTATION: YES** — sous réserve de la Phase 5 traitant les points listés en Open Questions/Risks (ergonomie du réordonnancement en masse, tests contre un vrai D1) comme des tâches d'implémentation, pas comme des inconnues de schéma.
+
+---
+
+## Data Access Layer (Implementation Brief 011)
+
+`src/lib/db/` — SQL explicite, pas d'ORM. Un fichier par entité (`media.ts`, `work.ts`, `services.ts`, `testimonials.ts`, `pages.ts`, `settings.ts`, `seo.ts`) au-dessus d'un moteur générique partagé (`publish.ts`, `snapshots.ts`) qui porte le SEUL mécanisme brouillon/publié (ADR-013) — chaque entité l'appelle plutôt que de le réimplémenter. Toute fonction reçoit `db: D1Database` en premier paramètre (jamais un singleton global) ; le seul endroit qui lit le binding réel est `client.ts` (`import { env } from "cloudflare:workers"`, la seule API supportée par `@astrojs/cloudflare` 14.x/Astro 6 — `Astro.locals.runtime.env` a été retiré).
+
+### Convention d'erreurs
+
+`Result<T, DbError> = { ok: true, data: T } | { ok: false, error: DbError }` pour toute issue métier attendue (`NOT_FOUND`, `DRAFT_ALREADY_EXISTS`, `NO_DRAFT`, `PUBLICATION_RIGHTS_REQUIRED`, `INVALID_STATE`, `VALIDATION_FAILED`). Une erreur SQL/réseau inattendue continue de lever une exception — elle n'entre pas dans ce modèle, il n'y a rien de significatif à en faire au niveau appelant au-delà de la journaliser.
+
+### `status` vs `fr_status`/`en_status` — deux leviers séparés
+
+Décision structurante de cette couche : `publishDraft()` (le mécanisme brouillon → publié) **ne touche jamais** `fr_status`/`en_status`. Ces colonnes sont gérées exclusivement par `setLanguageStatus()`, une action directe sur la ligne publiée. Raison : conflater les deux aurait fait d'une simple bascule « publier la version FR » une opération de copie de contenu complète (snapshot, enfants, etc.), alors que ce sont deux actions de nature différente — éditer un contenu en sécurité, et rendre une langue visible. C'est aussi le seul point où le garde-fou de droits de publication (ADR-011) s'applique côté application : `setWorkItemLanguageStatus`/`setTestimonialLanguageStatus` vérifient `media.publication_rights_confirmed` avant d'écrire, renvoyant `PUBLICATION_RIGHTS_REQUIRED` plutôt que de laisser le trigger D1 lever une erreur SQL brute — le trigger reste actif et reste le dernier rempart.
+
+### Réordonnancement (`reorderWorkItems`)
+
+Décision assumée : le réordonnancement de plusieurs `work_items` publiés est une écriture directe (validée puis appliquée en un seul `batch()`), pas N cycles brouillon/publication. Justification : `position` est, comme `fr_status`/`en_status`, un levier de curation/structure — pas la prose que *Save Draft ≠ Publish* protège. Le brief 009A avait envisagé le contraire (réordonnancement via N paires brouillon/publication) ; cette implémentation tranche pour la version directe, plus simple, cohérente avec le traitement déjà réservé au statut de langue.
+
+### Transactions D1 (confirmé empiriquement contre `worker-configuration.d.ts` généré et contre un vrai D1 local)
+
+`D1Database` n'expose que `prepare().bind().first/run/all()` et `batch(statements[])` — pas de `BEGIN`/`COMMIT`, pas de transaction interactive. `batch()` exécute un tableau FIXE de requêtes préparées de façon atomique (tout ou rien) ; aucune requête du tableau ne peut dépendre du résultat d'une requête précédente **du même appel**.
+
+- **`publishDraft` est entièrement atomique** : l'id du brouillon et l'id de la ligne publiée sont déjà connus avant de commencer, donc l'instantané, la mise à jour de la ligne publiée, le remplacement des enfants et la suppression du brouillon sont un seul `batch()`.
+- **`createDraftFromPublished`/`createNewDraft` ne le sont PAS entièrement** quand l'entité a des enfants : la nouvelle ligne brouillon doit d'abord être insérée (via `INSERT ... RETURNING id`, confirmé fonctionnel sur D1 local) pour connaître son id avant de pouvoir copier ses enfants avec cet id comme parent — deux allers-retours, pas un seul `batch()`. La fenêtre entre les deux laisse brièvement un brouillon sans ses enfants. Compromis assumé et documenté (pas un ADR : n'affecte aucune décision de schéma, seulement l'implémentation) pour un CMS mono-admin à faible concurrence.
+- Un `UPDATE`/`DELETE` qui ne touche 0 ligne n'est PAS une erreur SQL — `reorderWorkItems` valide donc l'existence de toutes les lignes par un `SELECT COUNT(*)` avant d'écrire, pour éviter qu'un id invalide dans la liste laisse les autres réordonnancements s'appliquer partiellement.
+
+### Enfants (`service_features`, `services_approach_steps`, `about_story_paragraphs`, `about_approach_items`)
+
+Stratégie « remplacer entièrement » (`DELETE` puis `INSERT...SELECT`), jamais de diff ligne à ligne — simple, correct, entièrement atomique dans le `batch()` de publication. Testé explicitement (`tests/dal/dal.test.ts`) : modifier les enfants d'un brouillon ne change jamais les enfants de la ligne publiée avant une publication explicite.
+
+### Snapshots
+
+`publish.ts` construit l'instantané à partir des seules `copyColumns` déclarées (jamais `SELECT *`), l'insère comme statement du même `batch()` que la publication (atomique avec elle), puis élague au-delà des 5 derniers **après** que le batch ait validé (`pruneOldSnapshots`, non atomique avec l'insertion — un crash entre les deux laisse au pire un instantané surnuméraire, jamais un instantané perdu).
+
+### Tests
+
+`tests/dal/dal.test.ts` (32 tests) tourne contre un vrai D1 local — pas `node:sqlite`, pas de mémoire jetable — via l'API Node de Miniflare (`Miniflare.getD1Database()`), le même mécanisme que `wrangler d1 execute` utilise en interne. Contrairement à la suite d'invariants du Brief 010 (qui shell-out vers `wrangler d1 execute` par requête, ~2s/appel), cette suite appelle directement les fonctions TypeScript de la DAL en process — ~11s pour 32 tests contre ~220s pour 27. Les fichiers `.ts` de test tournent via `tsx` (nouvelle devDependency) : le support natif de Node 22 pour TypeScript exige des imports relatifs avec extension explicite (`./types.ts`), incompatible avec la convention sans extension déjà en place dans tout le reste du code — `tsx` résout ce problème sans toucher au style d'import du code source.
+
+### Smoke test runtime (`src/pages/dev-d1-smoke-test.json.ts`)
+
+Prouve que le binding `DB` atteint réellement un handler de requête vivant (pas seulement les commandes Wrangler CLI) : `curl http://localhost:.../dev-d1-smoke-test.json` sous `astro dev` renvoie `{"binding":"DB","reachable":true,"query_result":{"ok":1}}` ; la même route sous `astro build && astro preview` (mode production) renvoie `404` — le garde-fou `import.meta.env.DEV` fonctionne. Les fichiers `src/pages/` commençant par `_`/`__` sont exclus du routage par Astro (pas seulement masqués) — cette route utilise donc un préfixe `dev-` plutôt que l'underscore, avec le garde-fou runtime comme véritable protection.

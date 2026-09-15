@@ -54,3 +54,7 @@ Modèles inchangés dans leur principe par rapport au Master Brief original (sec
 ## Publication
 
 Sauvegarder en brouillon → Prévisualiser (desktop/tablette/mobile) → Publier. Publication indépendante par langue.
+
+## Couche de données (Implementation Brief 011)
+
+`src/lib/db/` implémente désormais le brouillon/publié, les instantanés et les droits de publication décrits ci-dessus pour `work_items`, `services` (+ `service_features`), `testimonials`, et le contenu des 5 pages (Accueil/Travail/Services/À propos/Contact, y compris les enfants d'À propos et de Services). Voir `docs/DATA_ARCHITECTURE.md` "Data Access Layer" pour l'architecture. Aucune route admin ni CMS ne l'utilise encore — cette couche est la fondation sur laquelle le futur CMS (Dashboard, Travail, Médias, Services, Témoignages, Contenu, SEO, Paramètres) s'appuiera, pas le CMS lui-même.
