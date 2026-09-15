@@ -97,7 +97,7 @@ R2_BUCKET_NAME = "divine-motion-v2-media-local"
 [env.staging.vars]
 CF_ACCESS_TEAM_DOMAIN = "REPLACE_WITH_REAL_STAGING_TEAM_DOMAIN.cloudflareaccess.com"
 CF_ACCESS_AUD = "REPLACE_WITH_REAL_STAGING_ACCESS_APPLICATION_AUD_TAG"
-R2_ACCOUNT_ID = "REPLACE_WITH_REAL_R2_ACCOUNT_ID"
+R2_ACCOUNT_ID = "80690274479b4a7f525a8d4c768404bf"
 R2_BUCKET_NAME = "divine-motion-v2-media-staging"
 
 # Production Access/R2 config is deliberately NOT declared here — same
