@@ -4,16 +4,20 @@ import Container from "@/components/Container.astro";
 import Section from "@/components/Section.astro";
 import Heading from "@/components/Heading.astro";
 import Text from "@/components/Text.astro";
-import PrimaryButton from "@/components/PrimaryButton.astro";
+import EditorialLink from "@/components/EditorialLink.astro";
 import ImageFrame from "@/components/ImageFrame.astro";
+import ScrollReveal from "@/components/ScrollReveal.astro";
 import { getPath, type Locale } from "@/i18n/routes";
 import { servicesMock } from "@/data/mock/services";
+import { placeholderPhotos } from "@/lib/placeholder-photos";
+import { t } from "@/i18n/ui";
 
 interface Props {
   locale: Locale;
 }
 
 const { locale } = Astro.props;
+const copy = t(locale);
 const content = servicesMock[locale];
 ---
 
@@ -25,56 +29,208 @@ const content = servicesMock[locale];
 >
   <Section spacing="tight">
     <Container>
-      <Heading level={1} size="display">{content.title}</Heading>
-      <Text as="p" size="lg" class="services__intro">{content.intro}</Text>
+      <div data-reveal>
+        <Heading level={1} size="display">{content.title}</Heading>
+        <Text as="p" size="lg" tone="secondary" class="services-intro__text">
+          {content.intro}
+        </Text>
+      </div>
     </Container>
   </Section>
 
   {
-    content.items.map((item, index) => (
-      <Section background={index % 2 === 0 ? "primary" : "secondary"}>
-        <Container class="services__row">
-          <ImageFrame src="/mock/placeholder.svg" alt={item.imageAlt} ratio="4 / 3" />
-          <div class="services__copy">
-            <Heading level={2} size="h2">
-              {item.title}
-            </Heading>
-            <Text as="p" size="lg">
-              {item.text}
-            </Text>
-            <PrimaryButton href={getPath("contact", locale)}>
-              {content.ctaLabel}
-            </PrimaryButton>
+    content.services.map((service, index) => (
+      <Section background={index % 2 === 1 ? "secondary" : "primary"}>
+        <Container>
+          <div class={`service service--${service.layout}`} data-reveal>
+            <div class="service__image-wrap">
+              <ImageFrame
+                src={placeholderPhotos[service.imageKey]}
+                alt={service.imageAlt}
+                ratio={service.ratio}
+                class="media-hover"
+              />
+            </div>
+            <div class="service__copy">
+              <Heading level={3} size="eyebrow">
+                {service.label}
+              </Heading>
+              <Heading level={2} size={service.layout === "wide-offset" ? "h1" : "h2"}>
+                {service.title}
+              </Heading>
+              <Text as="p" size="lg" class="service__description">
+                {service.description}
+              </Text>
+              <ul class="service__features">
+                {service.features.map((feature) => (
+                  <li>{feature}</li>
+                ))}
+              </ul>
+              <EditorialLink href={getPath("contact", locale)}>
+                {service.ctaLabel}
+              </EditorialLink>
+            </div>
           </div>
         </Container>
       </Section>
     ))
   }
+
+  <Section aria-label={content.approachLabel}>
+    <Container>
+      <div data-reveal>
+        <Heading level={2} size="eyebrow">{content.approachLabel}</Heading>
+        <div class="approach">
+          {
+            content.approachSteps.map((step) => (
+              <div class="approach__step">
+                <Text as="span" size="lg" tone="secondary" class="approach__number">
+                  {step.number}
+                </Text>
+                <Heading level={3} size="h3">
+                  {step.title}
+                </Heading>
+                <Text as="p" tone="secondary">
+                  {step.text}
+                </Text>
+              </div>
+            ))
+          }
+        </div>
+      </div>
+    </Container>
+  </Section>
+
+  <Section background="secondary" aria-label="Contact">
+    <Container>
+      <div data-reveal>
+        <Heading level={2} size="display">{content.finalCta.headline}</Heading>
+        <EditorialLink href={getPath("contact", locale)} class="services-cta__link">
+          {copy.cta.contactUs}
+        </EditorialLink>
+      </div>
+    </Container>
+  </Section>
 </BaseLayout>
 
+<ScrollReveal />
+
 <style>
-  /* :global() — passed to the child Text component. */
-  :global(.services__intro) {
+  :global(.services-intro__text) {
     margin-top: var(--space-4);
-    max-width: 32rem;
+    max-width: 30rem;
   }
 
-  :global(.services__row) {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: var(--space-12);
-    align-items: center;
+  :global(.services-cta__link) {
+    margin-top: var(--space-8);
   }
 
-  .services__copy {
+  /* SERVICE BLOCKS — mobile-first: always image, then copy, regardless
+     of layout (section 21). Desktop layouts diverge below. */
+  .service {
     display: flex;
     flex-direction: column;
     gap: var(--space-6);
   }
 
-  @media (max-width: 768px) {
-    :global(.services__row) {
-      grid-template-columns: 1fr;
+  .service__image-wrap {
+    order: 1;
+  }
+
+  .service__copy {
+    order: 2;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-4);
+    max-width: 34rem;
+  }
+
+  .service__description {
+    color: var(--color-text-secondary);
+  }
+
+  .service__features {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+  }
+
+  .service__features li {
+    font-family: var(--font-sans);
+    font-size: var(--text-small);
+    color: var(--color-text-secondary);
+    padding-left: var(--space-4);
+    border-left: var(--border-width) solid var(--color-border);
+  }
+
+  @media (min-width: 768px) {
+    /* WIDE-OFFSET (Mariages) — large image, copy shifted left, never
+       centered, narrower than the image above it. */
+    .service--wide-offset .service__copy {
+      width: 62%;
+    }
+
+    /* SPLIT (Portraits & Lifestyle) — genuine two-column row. */
+    .service--split {
+      flex-direction: row;
+      align-items: center;
+      gap: var(--space-12);
+    }
+
+    .service--split .service__image-wrap {
+      flex: 5;
+      order: 1;
+    }
+
+    .service--split .service__copy {
+      flex: 7;
+      order: 2;
+    }
+
+    /* TEXT-IMAGE (Événements) — copy first, then a large image below;
+       reversed from wide-offset for real variety (section 9). */
+    .service--text-image .service__copy {
+      order: 1;
+    }
+
+    .service--text-image .service__image-wrap {
+      order: 2;
+    }
+  }
+
+  @media (min-width: 1024px) {
+    .service--wide-offset .service__copy {
+      width: 52%;
+    }
+
+    .service--split {
+      gap: var(--space-16);
+    }
+  }
+
+  /* APPROACH */
+  .approach {
+    margin-top: var(--space-8);
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: var(--space-8);
+  }
+
+  .approach__step {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+  }
+
+  :global(.approach__number) {
+    font-family: var(--font-serif);
+  }
+
+  @media (min-width: 768px) {
+    .approach {
+      grid-template-columns: repeat(3, 1fr);
+      gap: var(--space-8);
     }
   }
 </style>
