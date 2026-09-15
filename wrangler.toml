@@ -98,7 +98,7 @@ R2_BUCKET_NAME = "divine-motion-v2-media-local"
 CF_ACCESS_TEAM_DOMAIN = "REPLACE_WITH_REAL_STAGING_TEAM_DOMAIN.cloudflareaccess.com"
 CF_ACCESS_AUD = "REPLACE_WITH_REAL_STAGING_ACCESS_APPLICATION_AUD_TAG"
 R2_ACCOUNT_ID = "REPLACE_WITH_REAL_R2_ACCOUNT_ID"
-R2_BUCKET_NAME = "REPLACE_WITH_REAL_STAGING_R2_BUCKET_NAME"
+R2_BUCKET_NAME = "divine-motion-v2-media-staging"
 
 # Production Access/R2 config is deliberately NOT declared here — same
 # reasoning as the D1 section above. Set via Cloudflare dashboard
@@ -127,7 +127,7 @@ binding = "MEDIA"
 # NOT provisioned by this repo — `wrangler r2 bucket create
 # divine-motion-v2-media-staging` must be run once, manually, against the
 # real Cloudflare account (see docs/DEPLOYMENT.md "R2 environments").
-bucket_name = "REPLACE_WITH_REAL_STAGING_R2_BUCKET_NAME"
+bucket_name = "divine-motion-v2-media-staging"
 
 # Production R2 binding is deliberately NOT declared here — same reasoning
 # as D1/Access above.
