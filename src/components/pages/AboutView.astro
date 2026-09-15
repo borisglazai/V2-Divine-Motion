@@ -4,60 +4,213 @@ import Container from "@/components/Container.astro";
 import Section from "@/components/Section.astro";
 import Heading from "@/components/Heading.astro";
 import Text from "@/components/Text.astro";
-import PrimaryButton from "@/components/PrimaryButton.astro";
+import EditorialLink from "@/components/EditorialLink.astro";
 import ImageFrame from "@/components/ImageFrame.astro";
+import ScrollReveal from "@/components/ScrollReveal.astro";
 import { getPath, type Locale } from "@/i18n/routes";
 import { aboutMock } from "@/data/mock/about";
+import { placeholderPhotos } from "@/lib/placeholder-photos";
+import { t } from "@/i18n/ui";
 
 interface Props {
   locale: Locale;
 }
 
 const { locale } = Astro.props;
+const copy = t(locale);
 const content = aboutMock[locale];
 ---
 
 <BaseLayout
   locale={locale}
   pageId="about"
-  title={content.title}
-  description={content.paragraphs[0]}
+  title={content.hero.title}
+  description={content.hero.intro}
 >
   <Section spacing="none">
-    <ImageFrame src="/mock/placeholder.svg" alt={content.heroImageAlt} ratio="16 / 9" />
+    <ImageFrame
+      src={placeholderPhotos[content.hero.imageKey]}
+      alt={content.hero.imageAlt}
+      ratio={content.hero.ratio}
+      class="media-hover"
+    />
   </Section>
 
   <Section>
-    <Container class="about__content">
-      <Heading level={1} size="display">{content.title}</Heading>
-      <div class="about__paragraphs">
-        {content.paragraphs.map((paragraph) => <Text as="p" size="lg">{paragraph}</Text>)}
+    <Container class="about-hero">
+      <div data-reveal>
+        <Heading level={1} size="display">{content.hero.title}</Heading>
+        <Text as="p" size="lg" tone="secondary" class="about-hero__intro">
+          {content.hero.intro}
+        </Text>
+      </div>
+    </Container>
+  </Section>
+
+  <Section aria-label={content.story.label}>
+    <Container class="about-story">
+      <div data-reveal>
+        <Heading level={2} size="eyebrow">{content.story.label}</Heading>
+        <div class="about-story__paragraphs">
+          {content.story.paragraphs.map((paragraph) => (
+            <Text as="p" size="lg">
+              {paragraph}
+            </Text>
+          ))}
+        </div>
+      </div>
+    </Container>
+  </Section>
+
+  <Section background="secondary" aria-label={content.approach.label}>
+    <Container>
+      <div data-reveal>
+        <Heading level={2} size="eyebrow">{content.approach.label}</Heading>
+        <div class="about-approach">
+          {content.approach.items.map((item) => (
+            <div class="about-approach__item">
+              <Heading level={3} size="h3">
+                {item.word}
+              </Heading>
+              <Text as="p" tone="secondary">
+                {item.text}
+              </Text>
+            </div>
+          ))}
+        </div>
       </div>
     </Container>
   </Section>
 
   <Section spacing="none">
-    <ImageFrame src="/mock/placeholder.svg" alt={content.secondImageAlt} ratio="21 / 9" />
+    <div data-reveal>
+      <ImageFrame
+        src={placeholderPhotos[content.breathingImage.imageKey]}
+        alt={content.breathingImage.imageAlt}
+        ratio={content.breathingImage.ratio}
+        class="media-hover"
+      />
+    </div>
+  </Section>
+
+  <Section aria-label="Human note">
+    <Container>
+      <div class="about-human" data-reveal>
+        <div class="about-human__media">
+          <ImageFrame
+            src={placeholderPhotos[content.humanNote.imageKey]}
+            alt={content.humanNote.imageAlt}
+            ratio={content.humanNote.ratio}
+            class="media-hover"
+          />
+        </div>
+        <div class="about-human__copy">
+          <Text as="p" size="lg">
+            {content.humanNote.text}
+          </Text>
+        </div>
+      </div>
+    </Container>
   </Section>
 
   <Section background="secondary" aria-label="Contact">
     <Container>
-      <PrimaryButton href={getPath("contact", locale)}>{content.ctaLabel}</PrimaryButton>
+      <div data-reveal>
+        <Heading level={2} size="display">{content.finalCta.headline}</Heading>
+        <EditorialLink href={getPath("contact", locale)} class="about-cta__link">
+          {copy.cta.talkProject}
+        </EditorialLink>
+      </div>
     </Container>
   </Section>
 </BaseLayout>
 
+<ScrollReveal />
+
 <style>
-  /* :global() — this class is passed to the child Container component,
-     outside this file's own CSS scope. */
-  :global(.about__content) {
+  /* :global() — these classes are passed to child components (Container,
+     Text, EditorialLink), outside this file's own CSS scope. */
+  :global(.about-hero) {
     max-width: 42rem;
   }
 
-  .about__paragraphs {
+  :global(.about-hero__intro) {
+    margin-top: var(--space-4);
+  }
+
+  :global(.about-story) {
+    max-width: 34rem;
+  }
+
+  .about-story__paragraphs {
     margin-top: var(--space-8);
     display: flex;
     flex-direction: column;
     gap: var(--space-6);
+  }
+
+  :global(.about-cta__link) {
+    margin-top: var(--space-8);
+  }
+
+  /* APPROACH — three words, no numbering (kept distinct from Services'
+     numbered Approach section rather than repeating the same pattern). */
+  .about-approach {
+    margin-top: var(--space-8);
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: var(--space-8);
+  }
+
+  .about-approach__item {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    max-width: 22rem;
+  }
+
+  @media (min-width: 768px) {
+    .about-approach {
+      grid-template-columns: repeat(3, 1fr);
+      gap: var(--space-8);
+    }
+  }
+
+  /* HUMAN NOTE — image + copy, mobile always image-first. */
+  .about-human {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-6);
+  }
+
+  .about-human__media {
+    order: 1;
+  }
+
+  .about-human__copy {
+    order: 2;
+    max-width: 30rem;
+  }
+
+  @media (min-width: 768px) {
+    .about-human {
+      flex-direction: row;
+      align-items: center;
+      gap: var(--space-12);
+    }
+
+    .about-human__media {
+      flex: 5;
+    }
+
+    .about-human__copy {
+      flex: 7;
+    }
+  }
+
+  @media (min-width: 1024px) {
+    .about-human {
+      gap: var(--space-16);
+    }
   }
 </style>
