@@ -1,23 +1,33 @@
 -- ============================================================================
 -- Divine Motion V2 — 001_initial.sql (DRAFT — NOT EXECUTED, NOT APPLIED)
 -- ============================================================================
--- Status: design draft for Phase 4 / Data Architecture Brief 009.
--- This file is for audit and discussion. Do not run it against any D1
--- database (local, staging, or production) until it is explicitly reviewed
--- and approved. See docs/DATA_ARCHITECTURE.md for full rationale.
+-- Status: design draft for Phase 4 / Data Architecture Brief 009, revised
+-- per Review 009A. This file is for audit and discussion. Do not run it
+-- against any D1 database (local, staging, or production) until it is
+-- explicitly reviewed and approved. See docs/DATA_ARCHITECTURE.md.
 --
 -- Conventions used throughout (see DATA_ARCHITECTURE.md §18 for the
 -- justification of each):
 --   - Primary keys: INTEGER PRIMARY KEY AUTOINCREMENT (SQLite rowid alias,
 --     AUTOINCREMENT to guarantee no id reuse after a hard delete), except
---     the 5 singleton page-content tables which still use a surrogate
---     integer id (needed to support the draft-shadow-row pattern) and
---     page_seo, which uses page_key directly as primary key (see §9/§13).
+--     page_seo, which uses page_key directly as primary key (§9/§13).
 --   - Timestamps: INTEGER, Unix milliseconds (UTC), suffixed _at.
 --   - Booleans: INTEGER, CHECK(col IN (0,1)).
 --   - Enums: TEXT + CHECK(col IN (...)) — SQLite has no native enum type.
 --   - FR/EN: denormalized _fr/_en column pairs per ADR-007, never a
 --     generic translations table.
+--   - Draft/publish (Review 009A — one single mechanism, no exceptions):
+--     every publicly-editable entity (work_items, services, testimonials,
+--     and the 5 page-content tables) carries `status` ('draft'|
+--     'published') and a self-referencing `draft_of_id`. The row with
+--     status='published' is what the public site reads; at most one
+--     status='draft' row may exist per published row (partial unique
+--     index on draft_of_id). Editing a published item edits its draft
+--     shadow, never the published row itself, until an explicit Publish
+--     action copies the draft's fields onto the published row inside a
+--     transaction. Preview reads the draft row when one exists; the
+--     public site NEVER reads a status='draft' row. See
+--     DATA_ARCHITECTURE.md §13.
 --   - No generic JSON content blob anywhere in live content tables
 --     (ADR-004). The one narrow, justified exception is
 --     content_snapshots.snapshot_json — a rollback safety net, not a
@@ -64,10 +74,14 @@ CREATE TABLE media (
 
   -- Upload lifecycle (ADR-006 presigned direct upload): a row is created
   -- the moment an upload is authorized, before the file lands in R2, so no
-  -- upload can ever leave an incoherent/missing row (brief §23).
+  -- upload can ever leave an incoherent/missing row (brief §23). No
+  -- 'processing' state: Review 009A removed it — there is no real
+  -- asynchronous transformation step at MVP (Cloudflare Images/Resizing
+  -- transform on delivery, not at upload time), so a state nothing ever
+  -- sets is not modeled.
   processing_status               TEXT NOT NULL DEFAULT 'pending'
                                    CHECK (processing_status IN
-                                     ('pending', 'uploaded', 'processing',
+                                     ('pending', 'uploaded',
                                       'ready', 'failed', 'abandoned')),
 
   -- Publication rights live at the media level (source of truth), enforced
@@ -103,9 +117,21 @@ CREATE INDEX idx_media_created_at ON media(created_at);
 -- from (position, count, aspect ratio) — see DATA_ARCHITECTURE.md §6/§13.
 -- No soft delete: removing a media from Travail is just deleting the
 -- curation row; the media itself keeps its own lifecycle (brief §7).
+--
+-- Draft/publish (Review 009A): same draft-shadow-row mechanism as the
+-- page-content tables, one single mechanism site-wide. `status='published'`
+-- rows are what the public site reads; at most one `status='draft'` row
+-- may exist per published row (`draft_of_id`). Editing a published item
+-- edits its draft shadow, never the published row directly, until an
+-- explicit Publish action copies the draft's fields onto the published
+-- row. See DATA_ARCHITECTURE.md §13.
 -- ----------------------------------------------------------------------------
 CREATE TABLE work_items (
   id                     INTEGER PRIMARY KEY AUTOINCREMENT,
+  status                 TEXT NOT NULL DEFAULT 'published'
+                         CHECK (status IN ('draft', 'published')),
+  draft_of_id             INTEGER REFERENCES work_items(id) ON DELETE CASCADE,
+
   media_id               INTEGER NOT NULL REFERENCES media(id) ON DELETE RESTRICT,
 
   -- Admin-side organization only — not used by public filtering today
@@ -154,19 +180,35 @@ CREATE INDEX idx_work_items_fr_status ON work_items(fr_status);
 CREATE INDEX idx_work_items_en_status ON work_items(en_status);
 CREATE INDEX idx_work_items_featured_on_home ON work_items(featured_on_home)
   WHERE featured_on_home = 1;
+CREATE UNIQUE INDEX idx_work_items_one_draft_per_published
+  ON work_items(draft_of_id) WHERE draft_of_id IS NOT NULL;
+-- Public rendering must always filter status = 'published' in addition to
+-- fr_status/en_status = 'published' — a draft shadow row is never public.
 
 
 -- ----------------------------------------------------------------------------
 -- SERVICES
 -- Exactly 3 known MVP services (Mariages / Portraits & Lifestyle /
--- Événements). `layout` is a real typed column (frontend needs it to
--- render), but is NOT exposed as an editable Visual Editor field — see
--- DATA_ARCHITECTURE.md §7. No soft delete: fixed, near-permanent rows;
--- `is_active` covers hiding one.
+-- Événements). No `layout` column (Review 009A — removed): the three
+-- compositions are a frontend design decision keyed off `slug`, a stable
+-- identifier that never changes — not CMS content, so it does not live in
+-- D1 at all. See DATA_ARCHITECTURE.md §7/§13. No soft delete: fixed,
+-- near-permanent rows; `is_active` covers hiding one.
+--
+-- Draft/publish (Review 009A): same draft-shadow-row mechanism as
+-- work_items and page content — see DATA_ARCHITECTURE.md §13.
 -- ----------------------------------------------------------------------------
 CREATE TABLE services (
   id                 INTEGER PRIMARY KEY AUTOINCREMENT,
-  slug               TEXT NOT NULL UNIQUE,
+  status             TEXT NOT NULL DEFAULT 'published'
+                     CHECK (status IN ('draft', 'published')),
+  draft_of_id         INTEGER REFERENCES services(id) ON DELETE CASCADE,
+
+  -- Stable identifier the frontend uses to look up its (non-editable,
+  -- code-owned) layout — see docs/DATA_ARCHITECTURE.md §7. UNIQUE is
+  -- enforced only among published rows: a draft shadow legitimately
+  -- shares its published row's slug.
+  slug               TEXT NOT NULL,
 
   title_fr            TEXT NOT NULL,
   title_en            TEXT NOT NULL,
@@ -180,10 +222,6 @@ CREATE TABLE services (
 
   cta_label_fr         TEXT NOT NULL,
   cta_label_en         TEXT NOT NULL,
-
-  -- Design-authored, not admin-editable (see rationale in the report).
-  layout              TEXT NOT NULL
-                       CHECK (layout IN ('wide-offset', 'split', 'text-image')),
 
   position             INTEGER NOT NULL,
   is_active            INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0,1)),
@@ -205,9 +243,19 @@ CREATE INDEX idx_services_position ON services(position);
 CREATE INDEX idx_services_is_active ON services(is_active);
 CREATE INDEX idx_services_fr_status ON services(fr_status);
 CREATE INDEX idx_services_en_status ON services(en_status);
+CREATE UNIQUE INDEX idx_services_one_draft_per_published
+  ON services(draft_of_id) WHERE draft_of_id IS NOT NULL;
+-- slug is unique among published rows only — a draft shadow legitimately
+-- shares its published row's slug (it is a pending edit of that same
+-- service, not a new one).
+CREATE UNIQUE INDEX idx_services_slug_published
+  ON services(slug) WHERE status = 'published';
 
 -- Service "01"/"02"/"03" eyebrow labels are derived from `position` at
 -- render time, not stored (avoids a field that can drift from position).
+-- Layout (wide-offset/split/text-image) is NOT a column here at all
+-- (Review 009A) — it lives in frontend code, keyed by `slug`. See
+-- DATA_ARCHITECTURE.md §7/§13.
 
 CREATE TABLE service_features (
   id           INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -223,10 +271,19 @@ CREATE INDEX idx_service_features_service_id ON service_features(service_id);
 -- ----------------------------------------------------------------------------
 -- TESTIMONIALS
 -- Simple MVP model — no review system. Soft-deletable (brief §7: pulling a
--- testimonial down is a normal, reversible editorial action).
+-- testimonial down is a normal, reversible editorial action) — `deleted_at`
+-- is only meaningful on a published row; discarding a draft shadow is a
+-- hard DELETE of that row, not a soft delete.
+--
+-- Draft/publish (Review 009A): same draft-shadow-row mechanism as
+-- work_items/services/page content — see DATA_ARCHITECTURE.md §13.
 -- ----------------------------------------------------------------------------
 CREATE TABLE testimonials (
   id                            INTEGER PRIMARY KEY AUTOINCREMENT,
+  status                        TEXT NOT NULL DEFAULT 'published'
+                                 CHECK (status IN ('draft', 'published')),
+  draft_of_id                    INTEGER REFERENCES testimonials(id) ON DELETE CASCADE,
+
   author_name                   TEXT NOT NULL,
   quote_fr                       TEXT NOT NULL,
   quote_en                       TEXT NOT NULL,
@@ -257,6 +314,8 @@ CREATE INDEX idx_testimonials_position ON testimonials(position);
 CREATE INDEX idx_testimonials_deleted_at ON testimonials(deleted_at);
 CREATE INDEX idx_testimonials_fr_status ON testimonials(fr_status);
 CREATE INDEX idx_testimonials_en_status ON testimonials(en_status);
+CREATE UNIQUE INDEX idx_testimonials_one_draft_per_published
+  ON testimonials(draft_of_id) WHERE draft_of_id IS NOT NULL;
 
 
 -- ----------------------------------------------------------------------------
@@ -590,11 +649,14 @@ CREATE TABLE page_seo (
 -- ----------------------------------------------------------------------------
 -- CONTENT SNAPSHOTS — rollback safety net, not a full revision system.
 -- One JSON snapshot of an entity's own published columns, taken
--- automatically right before each publish action. Pruned to the last N
--- (recommended: 5) per entity. The ONE deliberate, justified exception to
--- "no JSON blob" (ADR-004) — this is an audit/recovery artifact, never
--- rendered, never queried for live content. No FK: entity_type/entity_key
--- is a loose reference by design (see DATA_ARCHITECTURE.md §15).
+-- automatically right before each publish action — now uniformly for
+-- every publishable entity (Review 009A extended draft/publish, and this
+-- snapshot mechanism with it, to work_items/services/testimonials, not
+-- just the 5 page-content tables). Pruned to the last N (recommended: 5)
+-- per entity. The ONE deliberate, justified exception to "no JSON blob"
+-- (ADR-004) — this is an audit/recovery artifact, never rendered, never
+-- queried for live content. No FK: entity_type/entity_key is a loose
+-- reference by design (see DATA_ARCHITECTURE.md §15).
 -- ----------------------------------------------------------------------------
 CREATE TABLE content_snapshots (
   id             INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -614,28 +676,14 @@ CREATE INDEX idx_content_snapshots_entity ON content_snapshots(entity_type, enti
 
 
 -- ----------------------------------------------------------------------------
--- CONTACT SUBMISSION LOG — minimal, non-PII, short-retention technical
--- log. Explicitly NOT a CRM / submissions table (brief §5, Master Brief
--- §20). Message body, name, email, phone, date, location are NEVER stored
--- here — they exist only in the transactional email. Purged by the same
--- kind of Cron Trigger Worker already planned for media purge.
+-- CONTACT — deliberately NO table (Review 009A).
+-- Flow: validation -> Turnstile -> transactional email -> Worker logs.
+-- No submission, no IP, no IP hash, nothing about a contact-form
+-- submission is stored in D1 at MVP. Observability (was the email sent,
+-- did Turnstile pass, is there an abuse spike) is a Worker-logs/alerting
+-- concern (Master Brief §58), not a database concern. See
+-- DATA_ARCHITECTURE.md §26.
 -- ----------------------------------------------------------------------------
-CREATE TABLE contact_submission_log (
-  id                        INTEGER PRIMARY KEY AUTOINCREMENT,
-  submitted_at               INTEGER NOT NULL,
-  locale                    TEXT NOT NULL CHECK (locale IN ('fr', 'en')),
-  service_type               TEXT,
-  turnstile_verified          INTEGER NOT NULL CHECK (turnstile_verified IN (0,1)),
-  email_status               TEXT NOT NULL DEFAULT 'pending'
-                             CHECK (email_status IN ('pending', 'sent', 'failed')),
-  email_provider_message_id   TEXT,
-  error_message               TEXT,
-  -- Salted hash, never the raw IP — basic anti-abuse pattern detection
-  -- without storing a raw identifiable network identifier.
-  ip_hash                    TEXT
-);
-
-CREATE INDEX idx_contact_submission_log_submitted_at ON contact_submission_log(submitted_at);
 
 
 -- ============================================================================
