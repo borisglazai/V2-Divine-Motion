@@ -77,3 +77,7 @@ Toute mutation (`authorize`, `upload-complete`, `save`, `delete`, `restore`) pas
 ### CORS R2
 
 Voir `docs/DEPLOYMENT.md` "R2 CORS" pour la politique exacte par environnement.
+
+### Validation staging réelle
+
+Tout ce qui précède a été prouvé contre D1/R2 local (Miniflare) uniquement — jamais contre un vrai compte Cloudflare (upload réel navigateur→R2, JWT Access réel, CORS réel, latence/mémoire réelles sur une image ~24 Mpx). Checklist d'exécution manuelle : `docs/STAGING_VALIDATION.md` (Validation Brief 014S) — non exécutée depuis l'environnement Claude Code, qui n'a pas d'accès réseau sortant vers Cloudflare.

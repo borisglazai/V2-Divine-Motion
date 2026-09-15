@@ -85,6 +85,10 @@ Suite dédiée (`tests/dal/dal.test.ts`, exécutée via `npm run db:test:dal`, i
 - **`tests/db/invariants.test.mjs`** (`npm run db:test:invariants`, étendu en Brief 014) — `media.authorized_at` existe et est nullable ; `media.uploaded_at` reste inchangé (`NOT NULL`) après 0003.
 - **`tests/db/migration-0003-sequencing.test.mjs`** (nouveau, Brief 014) — même discipline empirique que la vérification de séquencement 0002 (013A) : 0001+0002+0003 s'appliquent proprement sur une base neuve ; ré-appliquer `migrations apply` une seconde fois est un no-op sûr ; une base n'ayant que 0001+0002 upgrade correctement vers 0003, avec `authorized_at` bien rétro-rempli depuis `uploaded_at` pour les lignes préexistantes.
 
+## Validation Cloudflare staging réelle (Validation Brief 014S)
+
+Tout ce qui précède tourne contre des émulations locales (Miniflare) — aucun test de cette suite n'a jamais touché un vrai compte Cloudflare. Une validation manuelle réelle (D1/R2/Access/deploy staging + tests en navigateur réel : upload JPEG/PNG/~24 Mpx, multi-upload, CORS, JWT Access, persistance, guard 013A en conditions réelles) est requise avant toute phase de livraison média publique — checklist précise : `docs/STAGING_VALIDATION.md`. **Non exécutée** : l'environnement Claude Code n'a pas d'accès réseau sortant vers Cloudflare (`api.cloudflare.com`/`sparrow.cloudflare.com` bloqués par le proxy de sortie du sandbox) ; à exécuter par Boris depuis une machine avec accès réseau réel.
+
 ## Retiré du plan de test
 
 Tout scénario de « page projet individuelle publique » (fiche projet dédiée) est retiré — hors scope MVP (voir `docs/decisions/ADR-003-curated-work-vs-project-model.md`).
