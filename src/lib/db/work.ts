@@ -4,11 +4,11 @@
  */
 import type { Locale, Result, WorkItemRow } from "./types";
 import { fail, ok } from "./types";
-import { nowMs } from "./mappers";
 import {
   createDraftFromPublished,
   createNewDraft,
   deleteDraft,
+  getDraftOf,
   publishDraft,
   setLanguageStatus,
   updateDraft,
@@ -186,40 +186,76 @@ export async function setWorkItemLanguageStatus(
   });
 }
 
-/**
- * Reorders a set of already-published items in one atomic write.
- * Deliberately direct (bypasses draft/publish): position is a curation/
- * ordering lever, not prose content — the same category as
- * fr_status/en_status above, not the risky "editing text mid-session"
- * scenario ADR-013 protects against. See docs/DATA_ARCHITECTURE.md "DAL:
- * reorder".
- */
-export async function reorderWorkItems(
-  db: D1Database,
-  orderedIds: number[],
-  updatedBy?: string,
-): Promise<Result<void>> {
-  if (orderedIds.length === 0) return ok(undefined);
+export interface ReorderDraftResult {
+  publishedId: number;
+  draftId: number;
+}
 
-  // A 0-row UPDATE is not a SQL error, so `batch()` would silently commit
-  // the valid updates in the list even if one id were bad — pre-validate
-  // every id exists and is published BEFORE writing anything, so a bad
-  // id aborts the whole reorder instead of applying it partially.
-  const placeholders = orderedIds.map(() => "?").join(", ");
+/**
+ * Review 011A — REPLACES the earlier `reorderWorkItems`, which wrote
+ * `position` directly onto `status='published'` rows. That violated
+ * ADR-013/*Save Draft ≠ Publish*: an admin reordering Travail must never
+ * change what the public site shows until an explicit Publish. Removed
+ * outright rather than reinterpreted under the same name.
+ *
+ * This version only ever writes to draft shadow rows. For each published
+ * id in `orderedPublishedIds`, it reuses that item's existing draft if
+ * one is already open, or creates one (`createDraftFromPublished`) if
+ * not — reordering is content-adjacent curation, so a missing draft is
+ * created rather than the call failing, but nothing is ever published as
+ * a side effect: the published rows, and therefore the public site, are
+ * untouched by this function under all circumstances.
+ *
+ * Publishing the new order is a SEPARATE, explicit step per item
+ * (`publishWorkItem(db, draftId)` for each id returned here) — see the
+ * limitation below before assuming that step is atomic across the whole
+ * set.
+ *
+ * NOT ATOMIC ACROSS ITEMS, documented rather than worked around
+ * (Review 011A §1 "STOP and document precisely"): `publishDraft` is
+ * atomic per item (one `batch()` — see publish.ts), but publishing N
+ * reordered items is N separate calls, hence N separate transactions. A
+ * crash between two of them leaves a partially-applied order genuinely
+ * visible on the public site (some items already in their new position,
+ * others not). Guaranteeing all-or-nothing publication across an
+ * arbitrary set of items would need a new primitive this layer
+ * deliberately does not build now (e.g. a publish-batch/orchestration
+ * table, or extending `db.batch()` usage across multiple tables' rows at
+ * once) — that is CMS-level orchestration, explicitly left for the CMS
+ * Implementation Brief to design, not invented silently here.
+ */
+export async function reorderWorkItemDrafts(
+  db: D1Database,
+  orderedPublishedIds: number[],
+  updatedBy?: string,
+): Promise<Result<ReorderDraftResult[]>> {
+  if (orderedPublishedIds.length === 0) return ok([]);
+
+  const placeholders = orderedPublishedIds.map(() => "?").join(", ");
   const countRow = await db
     .prepare(`SELECT COUNT(*) AS count FROM work_items WHERE id IN (${placeholders}) AND status = 'published'`)
-    .bind(...orderedIds)
+    .bind(...orderedPublishedIds)
     .first<{ count: number }>();
-  if (!countRow || countRow.count !== orderedIds.length) {
+  if (!countRow || countRow.count !== orderedPublishedIds.length) {
     return fail("NOT_FOUND", "one or more work_item ids are not published rows");
   }
 
-  const now = nowMs();
-  const statements = orderedIds.map((id, index) =>
-    db
-      .prepare(`UPDATE work_items SET position = ?, updated_at = ?, updated_by = ? WHERE id = ?`)
-      .bind(index + 1, now, updatedBy ?? null, id),
-  );
-  await db.batch(statements);
-  return ok(undefined);
+  const results: ReorderDraftResult[] = [];
+  for (let i = 0; i < orderedPublishedIds.length; i++) {
+    const publishedId = orderedPublishedIds[i];
+    const existingDraft = await getDraftOf(db, TABLE, publishedId);
+    let draftId: number;
+    if (existingDraft) {
+      draftId = existingDraft.id;
+    } else {
+      const created = await createDraftFromPublished(db, CONFIG, publishedId, updatedBy);
+      if (!created.ok) return created;
+      draftId = created.data.draftId;
+    }
+    const updated = await updateDraft(db, TABLE, draftId, { position: i + 1 }, updatedBy);
+    if (!updated.ok) return updated;
+    results.push({ publishedId, draftId });
+  }
+
+  return ok(results);
 }

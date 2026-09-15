@@ -134,14 +134,25 @@ export async function markMediaFailed(db: D1Database, id: number): Promise<Resul
 }
 
 /**
- * Trash (soft delete). Does NOT block on usage — see `getMediaUsage`
- * below. Warning the admin before trashing a referenced media is a CMS
- * UI concern (a future brief); this layer only exposes the reference
- * count so that UI can make the call. Hard deletion, by contrast, IS
- * blocked at the database level (FK RESTRICT, migrations/0001_initial.sql)
- * — this repository does not expose a hard-delete function at all.
+ * Trash (soft delete). Review 011A: blocks with `MEDIA_IN_USE` — and
+ * writes nothing — if `getMediaUsage` finds any active reference
+ * (draft or published; a media referenced only by a draft shadow row is
+ * still "in use", since publishing that draft would leave the public
+ * site pointing at a trashed file). This is a DAL-level guarantee, not
+ * only a CMS UI warning: the reference check runs before the UPDATE, in
+ * the same call, so there's no gap a future caller could bypass. Hard
+ * deletion, by contrast, is blocked at the database level (FK RESTRICT,
+ * migrations/0001_initial.sql) — this repository does not expose a
+ * hard-delete function at all.
  */
 export async function softDeleteMedia(db: D1Database, id: number): Promise<Result<void>> {
+  const usage = await getMediaUsage(db, id);
+  const activeReferences = usage.filter((u) => u.count > 0);
+  if (activeReferences.length > 0) {
+    const detail = activeReferences.map((u) => `${u.table}.${u.column} (${u.count})`).join(", ");
+    return fail("MEDIA_IN_USE", `media #${id} is still referenced: ${detail}`);
+  }
+
   const result = await db
     .prepare(`UPDATE media SET deleted_at = ?, updated_at = ? WHERE id = ? AND deleted_at IS NULL`)
     .bind(nowMs(), nowMs(), id)
@@ -165,7 +176,7 @@ export interface MediaUsage {
   count: number;
 }
 
-/** How many rows across the schema reference this media — used by the CMS to warn before trashing, and to explain why a hard delete would be RESTRICTed. */
+/** How many rows across the schema reference this media — used by `softDeleteMedia` itself to block trashing an in-use media, and kept exported for the future CMS to display the detail (which rows) before an admin even attempts a delete. */
 export async function getMediaUsage(db: D1Database, id: number): Promise<MediaUsage[]> {
   const references: [string, string][] = [
     ["work_items", "media_id"],

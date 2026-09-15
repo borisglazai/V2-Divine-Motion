@@ -223,32 +223,78 @@ describe("work_items: FR/EN independence and publication rights", () => {
   });
 });
 
-describe("work_items: reorder", () => {
-  test("reorderWorkItems applies new positions atomically", async () => {
+describe("work_items: reorder (draft-safe, Review 011A)", () => {
+  let ids: number[]; // 3 published items, "A/B/C" in their current public order
+
+  test("setup: 3 published work_items with a known public order", async () => {
     const all = await work.listAllWorkItems(db);
     const published = all.filter((r) => r.status === "published").slice(0, 3);
-    const ids = published.map((r) => r.id);
-    const reversed = [...ids].reverse();
-
-    const result = await work.reorderWorkItems(db, reversed);
-    assert.equal(result.ok, true);
-
-    const first = await work.getWorkItem(db, reversed[0]);
-    assert.equal(first!.position, 1);
-    const last = await work.getWorkItem(db, reversed[reversed.length - 1]);
-    assert.equal(last!.position, reversed.length);
+    assert.equal(published.length, 3);
+    ids = published.map((r) => r.id);
   });
 
-  test("reorder with an unknown id fails without applying any change", async () => {
+  test("reorderWorkItemDrafts only writes drafts: public order A/B/C stays put until explicit publish, then reflects the new order", async () => {
+    const beforePositions = (await Promise.all(ids.map((id) => work.getWorkItem(db, id)))).map((r) => r!.position);
+
+    // 1. public order is A/B/C (captured above as beforePositions on ids A,B,C)
+    // 2. reorder the drafts, reversed (C, B, A)
+    const reversed = [...ids].reverse();
+    const result = await work.reorderWorkItemDrafts(db, reversed);
+    assert.equal(result.ok, true);
+    if (!result.ok) return;
+
+    // 3. public/published reads are still A/B/C — reorder must never touch published rows
+    const afterReorder = (await Promise.all(ids.map((id) => work.getWorkItem(db, id)))).map((r) => r!.position);
+    assert.deepEqual(afterReorder, beforePositions, "reordering drafts must never change what the public reads");
+
+    for (const { publishedId, draftId } of result.data) {
+      const draft = await work.getWorkItem(db, draftId);
+      assert.equal(draft!.status, "draft");
+      assert.equal(draft!.position, reversed.indexOf(publishedId) + 1, "the new order is only visible on the draft shadow row");
+    }
+
+    // 4. after an explicit publish per item, the new order is visible publicly
+    for (const { draftId } of result.data) {
+      const pub = await work.publishWorkItem(db, draftId);
+      assert.equal(pub.ok, true);
+    }
+    const afterPublish = (await Promise.all(reversed.map((id) => work.getWorkItem(db, id)))).map((r) => r!.position);
+    assert.deepEqual(afterPublish, [1, 2, 3], "after explicit publish, the reversed order is visible");
+  });
+
+  test("reordering an item with no open draft auto-creates one, without publishing anything", async () => {
+    const [publishedId] = ids; // by now has no draft (published by the previous test)
+    const publicBefore = await work.getWorkItem(db, publishedId);
+
+    const result = await work.reorderWorkItemDrafts(db, [publishedId]);
+    assert.equal(result.ok, true);
+    if (!result.ok) return;
+    assert.equal(result.data.length, 1);
+    const draft = await work.getWorkItem(db, result.data[0].draftId);
+    assert.equal(draft!.status, "draft");
+    assert.equal(draft!.draft_of_id, publishedId, "a new draft shadow row must have been created for this published item");
+
+    const publicAfter = await work.getWorkItem(db, publishedId);
+    assert.equal(publicAfter!.position, publicBefore!.position, "auto-creating a draft to reorder must not touch the published row");
+  });
+
+  test("reorder with an unknown id fails without creating or modifying any draft", async () => {
     const all = await work.listAllWorkItems(db);
-    const published = all.filter((r) => r.status === "published")[0];
+    const published = all.filter((r) => r.status === "published" && !ids.includes(r.id))[0];
     const before = published.position;
 
-    const result = await work.reorderWorkItems(db, [published.id, 999999]);
+    const result = await work.reorderWorkItemDrafts(db, [published.id, 999999]);
     assert.equal(result.ok, false);
+    if (!result.ok) assert.equal(result.error.code, "NOT_FOUND");
 
     const after = await work.getWorkItem(db, published.id);
-    assert.equal(after!.position, before, "a bad id in the list must not partially apply the reorder");
+    assert.equal(after!.position, before, "a bad id in the list must not create/modify any draft, even for the valid ids");
+
+    const draft = await db
+      .prepare("SELECT id FROM work_items WHERE draft_of_id = ?")
+      .bind(published.id)
+      .first<{ id: number }>();
+    assert.equal(draft, null, "no draft must have been created for the valid id when the batch is rejected");
   });
 });
 
@@ -421,6 +467,58 @@ describe("media: usage check and soft delete", () => {
     assert.equal(del.ok, true);
     const restore = await media.restoreMedia(db, created.data.id);
     assert.equal(restore.ok, true);
+  });
+
+  test("Review 011A: a referenced media is refused with MEDIA_IN_USE, deleted_at unchanged", async () => {
+    const mediaId = await findMediaId("media/seed-a.jpg");
+    const before = await media.getMedia(db, mediaId);
+    assert.equal(before!.deleted_at, null);
+
+    const del = await media.softDeleteMedia(db, mediaId);
+    assert.equal(del.ok, false);
+    if (!del.ok) assert.equal(del.error.code, "MEDIA_IN_USE");
+
+    const after = await media.getMedia(db, mediaId);
+    assert.equal(after!.deleted_at, null, "a refused delete must not modify any data");
+  });
+
+  test("Review 011A: once every reference is removed, soft delete succeeds; restore still works", async () => {
+    const createdMedia = await media.createMediaMetadata(db, {
+      storageKey: "media/dal-referenced-then-freed.jpg",
+      mimeType: "image/jpeg",
+      sizeBytes: 100,
+    });
+    assert.equal(createdMedia.ok, true);
+    if (!createdMedia.ok) return;
+    const mediaId = createdMedia.data.id;
+
+    const createdItem = await work.createWorkItem(db, {
+      mediaId,
+      position: 1,
+      ratio: "1/1",
+      altFr: "réf",
+      altEn: "ref",
+    });
+    assert.equal(createdItem.ok, true);
+    if (!createdItem.ok) return;
+
+    // still referenced (by the unpublished draft work_item) -> blocked
+    const blocked = await media.softDeleteMedia(db, mediaId);
+    assert.equal(blocked.ok, false);
+    if (!blocked.ok) assert.equal(blocked.error.code, "MEDIA_IN_USE");
+
+    // remove the only reference
+    const deletedDraft = await work.deleteWorkItemDraft(db, createdItem.data.draftId);
+    assert.equal(deletedDraft.ok, true);
+
+    const usage = await media.getMediaUsage(db, mediaId);
+    assert.ok(usage.every((u) => u.count === 0), "no reference should remain");
+
+    const del = await media.softDeleteMedia(db, mediaId);
+    assert.equal(del.ok, true, "once unreferenced, soft delete succeeds");
+
+    const restore = await media.restoreMedia(db, mediaId);
+    assert.equal(restore.ok, true, "restore continues to work after a previously-blocked delete now succeeds");
   });
 });
 

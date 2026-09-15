@@ -30,7 +30,8 @@ export type DbErrorCode =
   | "NO_DRAFT"
   | "PUBLICATION_RIGHTS_REQUIRED"
   | "INVALID_STATE"
-  | "VALIDATION_FAILED";
+  | "VALIDATION_FAILED"
+  | "MEDIA_IN_USE";
 
 export interface DbError {
   code: DbErrorCode;

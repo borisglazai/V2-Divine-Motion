@@ -196,13 +196,13 @@ Reste à couvrir en Phase 5 (contre un vrai D1, pas seulement SQLite jetable) : 
 1. **Cloudflare Images vs Image Resizing** (ADR-005) : reste ouvert, hors du périmètre pur schéma D1 — impact budgétaire/opérationnel non tranché ici.
 2. **Vidéo** : `media.media_type` reste restreint à `'image'` au MVP (confirmé hors scope par la Review 009A) — aucun pipeline vidéo choisi, signalé explicitement.
 3. **Rétention de `content_snapshots`** : recommandé 5 instantanés par entité, désormais aussi pour `work_items`/`services`/`testimonials` — nombre à confirmer, pas une contrainte technique dure.
-4. **Réordonnancement en masse de Travail** : le schéma supporte une publication multi-lignes en une transaction, mais l'UX exacte (publier chaque déplacement séparément vs un bouton « publier le réordonnancement ») reste à définir en Phase 5 — voir Risks.
+4. **Réordonnancement en masse de Travail** : résolu côté brouillon par la Review 011A (`reorderWorkItemDrafts` — voir "Data Access Layer" ci-dessous), qui ne modifie jamais les lignes publiées. Reste ouvert : l'UX/orchestration d'une publication groupée et atomique de plusieurs items réordonnés (un bouton « publier le réordonnancement » qui serait tout-ou-rien) — délibérément non construite en Phase 5, à concevoir dans le futur Brief CMS.
 
 *(Le layout Travail/Services et le stockage des soumissions Contact, précédemment listés ici, sont désormais des décisions verrouillées — voir ADR-014, ADR-015.)*
 
 ## Risks
 
-- **Nouveau (009A)** : le réordonnancement de plusieurs `work_items` en une session passe maintenant par plusieurs paires brouillon/publication. Le schéma le permet (transaction multi-lignes), mais l'ergonomie CMS exacte n'est pas conçue ici — à traiter en Phase 5, pas un blocage du schéma.
+- **Mis à jour (Review 011A)** : le réordonnancement de plusieurs `work_items` en une session passe par plusieurs brouillons (`reorderWorkItemDrafts`), publiés ensuite un par un — voir "Data Access Layer" ci-dessous. La publication groupée n'est pas atomique entre items ; l'orchestration d'une publication groupée atomique reste à concevoir dans le futur Brief CMS, pas un blocage du schéma.
 - Les triggers de droits de publication dépendent de `PRAGMA foreign_keys`/triggers réellement actifs sur chaque connexion D1 — à vérifier explicitement en test contre un vrai D1 (voir Schema tests), pas supposé.
 - Le calcul algorithmique de composition Travail est un pari UX, maintenant verrouillé sans donnée `layout` de secours : à valider visuellement avec un vrai volume de photos réelles avant la Phase 6 (contenu réel).
 - Sans table de log de contact, la seule protection contre un échec silencieux d'envoi d'email est l'alerting Worker (Master Brief §58) — aucun filet de sécurité en base pour un lead perdu.
@@ -238,9 +238,15 @@ Le modèle applique désormais un mécanisme brouillon/publié unique et sans ex
 
 Décision structurante de cette couche : `publishDraft()` (le mécanisme brouillon → publié) **ne touche jamais** `fr_status`/`en_status`. Ces colonnes sont gérées exclusivement par `setLanguageStatus()`, une action directe sur la ligne publiée. Raison : conflater les deux aurait fait d'une simple bascule « publier la version FR » une opération de copie de contenu complète (snapshot, enfants, etc.), alors que ce sont deux actions de nature différente — éditer un contenu en sécurité, et rendre une langue visible. C'est aussi le seul point où le garde-fou de droits de publication (ADR-011) s'applique côté application : `setWorkItemLanguageStatus`/`setTestimonialLanguageStatus` vérifient `media.publication_rights_confirmed` avant d'écrire, renvoyant `PUBLICATION_RIGHTS_REQUIRED` plutôt que de laisser le trigger D1 lever une erreur SQL brute — le trigger reste actif et reste le dernier rempart.
 
-### Réordonnancement (`reorderWorkItems`)
+### Réordonnancement (`reorderWorkItemDrafts`) — corrigé en Review 011A
 
-Décision assumée : le réordonnancement de plusieurs `work_items` publiés est une écriture directe (validée puis appliquée en un seul `batch()`), pas N cycles brouillon/publication. Justification : `position` est, comme `fr_status`/`en_status`, un levier de curation/structure — pas la prose que *Save Draft ≠ Publish* protège. Le brief 009A avait envisagé le contraire (réordonnancement via N paires brouillon/publication) ; cette implémentation tranche pour la version directe, plus simple, cohérente avec le traitement déjà réservé au statut de langue.
+**Décision initiale renversée.** L'implémentation Brief 011 écrivait `position` directement sur les lignes `status='published'`, en la traitant comme `fr_status`/`en_status` (un levier de curation, pas la prose que *Save Draft ≠ Publish* protège). La Review 011A a identifié que ce raisonnement était faux pour l'ordre de Travail : contrairement au statut de langue (qui ne fait qu'afficher/masquer un contenu déjà publié), l'ordre EST une donnée publique directement visible sur le site — un réordonnancement dans l'admin ne doit donc jamais changer ce que le public voit avant un Publish explicite. `reorderWorkItems` a été supprimé, pas réinterprété sous le même nom.
+
+`reorderWorkItemDrafts(db, orderedPublishedIds, updatedBy?)` le remplace et n'écrit plus jamais que sur des lignes brouillon : pour chaque id publié de la liste, elle réutilise le brouillon déjà ouvert s'il existe, ou en crée un (`createDraftFromPublished`) sinon — un brouillon manquant est donc créé plutôt que de faire échouer l'appel, mais aucune ligne publiée n'est jamais modifiée par cette fonction, quelle que soit la situation. Une validation `SELECT COUNT(*)` préalable rejette l'ensemble si un id de la liste n'est pas une ligne publiée existante, avant toute écriture.
+
+Publier le nouvel ordre reste une étape **séparée et explicite**, par item (`publishWorkItem(db, draftId)` pour chaque id retourné) — ce n'est PAS orchestré par `reorderWorkItemDrafts`.
+
+**Limitation documentée, non contournée (Review 011A) : pas d'atomicité entre plusieurs items publiés.** `publishDraft` est atomique par item (un seul `batch()` — voir Transactions D1 ci-dessous), mais publier N items réordonnés reste N appels séparés, donc N transactions indépendantes. Un crash entre deux publications laisse un ordre partiellement appliqué réellement visible côté public (certains items dans leur nouvelle position, d'autres non). Garantir une publication tout-ou-rien sur un ensemble arbitraire d'items demanderait une nouvelle primitive (table d'orchestration publish-batch, ou extension de `db.batch()` à travers plusieurs lignes de plusieurs tables à la fois) que cette couche ne construit délibérément pas maintenant — c'est de l'orchestration niveau CMS, explicitement laissée au futur Brief CMS, pas inventée silencieusement ici.
 
 ### Transactions D1 (confirmé empiriquement contre `worker-configuration.d.ts` généré et contre un vrai D1 local)
 
@@ -248,7 +254,7 @@ Décision assumée : le réordonnancement de plusieurs `work_items` publiés est
 
 - **`publishDraft` est entièrement atomique** : l'id du brouillon et l'id de la ligne publiée sont déjà connus avant de commencer, donc l'instantané, la mise à jour de la ligne publiée, le remplacement des enfants et la suppression du brouillon sont un seul `batch()`.
 - **`createDraftFromPublished`/`createNewDraft` ne le sont PAS entièrement** quand l'entité a des enfants : la nouvelle ligne brouillon doit d'abord être insérée (via `INSERT ... RETURNING id`, confirmé fonctionnel sur D1 local) pour connaître son id avant de pouvoir copier ses enfants avec cet id comme parent — deux allers-retours, pas un seul `batch()`. La fenêtre entre les deux laisse brièvement un brouillon sans ses enfants. Compromis assumé et documenté (pas un ADR : n'affecte aucune décision de schéma, seulement l'implémentation) pour un CMS mono-admin à faible concurrence.
-- Un `UPDATE`/`DELETE` qui ne touche 0 ligne n'est PAS une erreur SQL — `reorderWorkItems` valide donc l'existence de toutes les lignes par un `SELECT COUNT(*)` avant d'écrire, pour éviter qu'un id invalide dans la liste laisse les autres réordonnancements s'appliquer partiellement.
+- Un `UPDATE`/`DELETE` qui ne touche 0 ligne n'est PAS une erreur SQL — `reorderWorkItemDrafts` valide donc l'existence (et le statut `published`) de toutes les lignes par un `SELECT COUNT(*)` avant d'écrire quoi que ce soit, pour éviter qu'un id invalide dans la liste laisse les autres brouillons se créer/modifier partiellement.
 
 ### Enfants (`service_features`, `services_approach_steps`, `about_story_paragraphs`, `about_approach_items`)
 

@@ -37,8 +37,8 @@ Suite dédiée (`tests/dal/dal.test.ts`, exécutée via `npm run db:test:dal`, i
 - **Snapshots** — un instantané est bien créé avant chaque publication d'un contenu déjà publié, capture l'état PRÉ-publication ; 6 publications consécutives laissent exactement 5 instantanés (élagage vérifié, pas supposé).
 - **Droits de publication côté application** — `setWorkItemLanguageStatus`/`setTestimonialLanguageStatus` renvoient `PUBLICATION_RIGHTS_REQUIRED` *avant* toute requête SQL quand le média n'a pas ses droits confirmés ; la publication réussit une fois confirmés ; FR et EN restent indépendants.
 - **Isolation des tables enfants** — `service_features` (Services) et les deux enfants d'À propos (`about_story_paragraphs`, `about_approach_items`) simultanément : éditer les enfants d'un brouillon ne touche jamais les enfants de la ligne publiée avant publication.
-- **Réordonnancement** (`reorderWorkItems`) — application atomique de nouvelles positions ; un id invalide dans la liste rejette l'ensemble sans appliquer aucun changement partiel.
-- **Media** — `getMediaUsage` reflète les références réelles ; soft delete/restore.
+- **Réordonnancement** (`reorderWorkItemDrafts`, Review 011A) — n'écrit jamais que sur des brouillons ; un id invalide dans la liste rejette l'ensemble sans créer/modifier aucun brouillon ; l'ordre public reste inchangé jusqu'à une publication explicite par item, testé de bout en bout (ordre public A/B/C → réordre les brouillons → lecture publique toujours A/B/C → après publication explicite, nouvel ordre visible).
+- **Media** — `getMediaUsage` reflète les références réelles ; soft delete/restore ; `softDeleteMedia` refuse (`MEDIA_IN_USE`, aucune donnée modifiée) tant qu'une référence existe (Review 011A).
 - **Settings/SEO** — mise à jour partielle (seuls les champs fournis changent), indépendance entre pages.
 
 ## Retiré du plan de test
