@@ -36,6 +36,8 @@ export const ui = {
       date: "Date (facultative)",
       location: "Lieu",
       message: "Message",
+      messagePlaceholder:
+        "Parlez-nous de votre projet, de votre date et de ce que vous imaginez.",
       submit: "Envoyer",
       privacyNotice:
         "Vos renseignements servent uniquement à répondre à votre demande.",
@@ -74,6 +76,7 @@ export const ui = {
       date: "Date (optional)",
       location: "Location",
       message: "Message",
+      messagePlaceholder: "Tell us about your project, your date and what you have in mind.",
       submit: "Send",
       privacyNotice: "Your information is only used to respond to your request.",
     },

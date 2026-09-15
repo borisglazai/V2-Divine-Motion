@@ -5,7 +5,9 @@ import Section from "@/components/Section.astro";
 import Heading from "@/components/Heading.astro";
 import Text from "@/components/Text.astro";
 import PrimaryButton from "@/components/PrimaryButton.astro";
+import ScrollReveal from "@/components/ScrollReveal.astro";
 import { getPath, type Locale } from "@/i18n/routes";
+import { contactMock } from "@/data/mock/contact";
 import { t } from "@/i18n/ui";
 
 interface Props {
@@ -15,109 +17,154 @@ interface Props {
 const { locale } = Astro.props;
 const copy = t(locale);
 const form = copy.contactForm;
-
-const title = locale === "fr" ? "Contact" : "Contact";
-const description =
-  locale === "fr"
-    ? "Parlez-nous de votre projet — mariage, portrait ou événement."
-    : "Tell us about your project — wedding, portrait or event.";
+const content = contactMock[locale];
 ---
 
-<BaseLayout locale={locale} pageId="contact" title={title} description={description}>
+<BaseLayout
+  locale={locale}
+  pageId="contact"
+  title={content.hero.title}
+  description={content.hero.subtext}
+>
   <Section spacing="tight">
-    <Container class="contact">
-      <Heading level={1} size="display" id="contact-heading">{title}</Heading>
+    <Container class="contact-hero">
+      <div data-reveal>
+        <Heading level={1} size="display" id="contact-heading">
+          {content.hero.title}
+        </Heading>
+        <Text as="p" size="lg" tone="secondary" class="contact-hero__subtext">
+          {content.hero.subtext}
+        </Text>
+      </div>
+    </Container>
+  </Section>
 
-      <form class="contact__form" aria-labelledby="contact-heading" data-contact-form>
-        <div class="contact__field">
+  <Section spacing="tight">
+    <Container class="contact-form-wrap">
+      <form class="contact-form" aria-labelledby="contact-heading" data-reveal>
+        <div class="contact-form__field">
           <label for="name">{form.name}</label>
           <input type="text" id="name" name="name" autocomplete="name" required />
         </div>
 
-        <div class="contact__field">
+        <div class="contact-form__field">
           <label for="email">{form.email}</label>
           <input type="email" id="email" name="email" autocomplete="email" required />
         </div>
 
-        <div class="contact__field">
+        <div class="contact-form__field">
           <label for="phone">{form.phone}</label>
           <input type="tel" id="phone" name="phone" autocomplete="tel" />
         </div>
 
-        <div class="contact__field">
+        <div class="contact-form__field">
           <label for="serviceType">{form.serviceType}</label>
           <select id="serviceType" name="serviceType" required>
             {form.serviceTypeOptions.map((option) => <option value={option}>{option}</option>)}
           </select>
         </div>
 
-        <div class="contact__field">
+        <div class="contact-form__field">
           <label for="date">{form.date}</label>
           <input type="date" id="date" name="date" />
         </div>
 
-        <div class="contact__field">
+        <div class="contact-form__field">
           <label for="location">{form.location}</label>
           <input type="text" id="location" name="location" />
         </div>
 
-        <div class="contact__field contact__field--full">
+        <div class="contact-form__field contact-form__field--full">
           <label for="message">{form.message}</label>
-          <textarea id="message" name="message" rows="5" required></textarea>
+          <textarea
+            id="message"
+            name="message"
+            rows="6"
+            required
+            placeholder={form.messagePlaceholder}
+          ></textarea>
         </div>
 
-        <div class="contact__field contact__field--full">
+        <div class="contact-form__field contact-form__field--full">
           <Text as="p" size="small" tone="secondary">
             {form.privacyNotice}{" "}
             <a href={getPath("privacy", locale)}>{copy.footer.privacy}</a>
           </Text>
         </div>
 
-        <div class="contact__field contact__field--full">
-          <PrimaryButton type="submit">{form.submit}</PrimaryButton>
-          <p class="contact__status" data-contact-status role="status" hidden></p>
+        <div class="contact-form__field contact-form__field--full">
+          <!-- No `type="submit"` — PrimaryButton defaults to type="button",
+               so this can never trigger a real form submission (section
+               10/26: visual only, no backend, no fake success message). -->
+          <PrimaryButton>{form.submit}</PrimaryButton>
         </div>
       </form>
     </Container>
   </Section>
+
+  <Section aria-label={content.details.label}>
+    <Container class="contact-details">
+      <div data-reveal>
+        <Heading level={2} size="eyebrow">{content.details.label}</Heading>
+        <ul class="contact-details__list">
+          {content.details.items.map((item) => (
+            <li>
+              <span class="contact-details__label">{item.label}</span>
+              <a href={item.href}>{item.value}</a>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </Container>
+  </Section>
+
+  <Section background="secondary">
+    <Container>
+      <div data-reveal>
+        <Heading level={2} size="h2" class="contact-closing">
+          {content.closingNote}
+        </Heading>
+      </div>
+    </Container>
+  </Section>
 </BaseLayout>
 
-<script>
-  const form = document.querySelector<HTMLFormElement>("[data-contact-form]");
-  const status = document.querySelector<HTMLElement>("[data-contact-status]");
-
-  form?.addEventListener("submit", (event) => {
-    event.preventDefault();
-    // Foundations phase only: no real submission, no Turnstile yet
-    // (docs/decisions and Implementation Brief 001, section 28 — hors scope).
-    if (status) {
-      status.hidden = false;
-      status.textContent =
-        document.documentElement.lang === "fr"
-          ? "Formulaire de démonstration — l'envoi réel sera activé dans une phase ultérieure."
-          : "Demo form — real submission will be enabled in a later phase.";
-    }
-  });
-</script>
+<ScrollReveal />
 
 <style>
-  /* :global() — passed to the child Container component. */
-  :global(.contact) {
-    max-width: 42rem;
+  /* :global() — passed to child components (Container, Text, Heading),
+     outside this file's own CSS scope. */
+  :global(.contact-hero) {
+    max-width: 34rem;
   }
 
-  .contact__form {
-    margin-top: var(--space-8);
+  :global(.contact-hero__subtext) {
+    margin-top: var(--space-4);
+  }
+
+  :global(.contact-form-wrap) {
+    max-width: 40rem;
+  }
+
+  :global(.contact-details) {
+    max-width: 34rem;
+  }
+
+  :global(.contact-closing) {
+    max-width: 30rem;
+  }
+
+  .contact-form {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: var(--space-6);
   }
 
-  .contact__field--full {
+  .contact-form__field--full {
     grid-column: 1 / -1;
   }
 
-  .contact__field {
+  .contact-form__field {
     display: flex;
     flex-direction: column;
     gap: var(--space-2);
@@ -137,20 +184,53 @@ const description =
     border-radius: var(--radius-sm);
     padding: var(--space-3) var(--space-4);
     color: var(--color-text-primary);
+    font-size: var(--text-body);
+  }
+
+  input:focus-visible,
+  select:focus-visible,
+  textarea:focus-visible {
+    border-color: var(--color-accent-warm);
   }
 
   textarea {
     resize: vertical;
   }
 
-  .contact__status {
-    margin-top: var(--space-4);
-    color: var(--color-text-secondary);
+  .contact-details__list {
+    margin-top: var(--space-6);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+  }
+
+  .contact-details__list li {
+    display: flex;
+    align-items: baseline;
+    gap: var(--space-3);
+  }
+
+  .contact-details__label {
+    font-family: var(--font-sans);
     font-size: var(--text-small);
+    color: var(--color-text-secondary);
+    min-width: 6rem;
+  }
+
+  .contact-details__list a {
+    font-family: var(--font-sans);
+    color: var(--color-text-primary);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+
+  .contact-details__list a:hover,
+  .contact-details__list a:focus-visible {
+    color: var(--color-accent-warm);
   }
 
   @media (max-width: 768px) {
-    .contact__form {
+    .contact-form {
       grid-template-columns: 1fr;
     }
   }
