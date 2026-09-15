@@ -3,7 +3,7 @@ interface Props {
   /** Semantic level — kept separate from visual size. */
   level?: 1 | 2 | 3 | 4;
   /** Visual size, independent of semantic level. */
-  size?: "display-xl" | "display" | "h1" | "h2" | "h3";
+  size?: "display-xl" | "display" | "h1" | "h2" | "h3" | "eyebrow";
   class?: string;
   id?: string;
 }
@@ -43,5 +43,18 @@ const Tag = `h${level}` as "h1" | "h2" | "h3" | "h4";
   .heading--h3 {
     font-size: var(--text-h3);
     line-height: var(--leading-snug);
+  }
+
+  /* Micro-label variant — sans-serif, small, tracked out. Section labels
+     ("Travail", "Services", "À propos") use this instead of a loud serif
+     display size, per docs/DESIGN_SYSTEM.md's "micro-labels discrets". */
+  .heading--eyebrow {
+    font-family: var(--font-sans);
+    font-weight: 600;
+    font-size: var(--text-small);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--color-text-secondary);
+    line-height: var(--leading-normal);
   }
 </style>

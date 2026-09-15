@@ -4,11 +4,11 @@ import Container from "@/components/Container.astro";
 import Section from "@/components/Section.astro";
 import Heading from "@/components/Heading.astro";
 import Text from "@/components/Text.astro";
-import PrimaryButton from "@/components/PrimaryButton.astro";
 import EditorialLink from "@/components/EditorialLink.astro";
 import ImageFrame from "@/components/ImageFrame.astro";
 import { getPath, type Locale } from "@/i18n/routes";
 import { homeMock } from "@/data/mock/home";
+import { placeholderPhotos } from "@/lib/placeholder-photos";
 import { t } from "@/i18n/ui";
 
 interface Props {
@@ -20,134 +20,368 @@ const copy = t(locale);
 const content = homeMock[locale];
 
 const title = locale === "fr" ? "Accueil" : "Home";
-const description =
-  locale === "fr"
-    ? "Divine Motion — studio de photographie et vidéographie."
-    : "Divine Motion — photography and videography studio.";
+const description = content.hero.subline;
 ---
 
-<BaseLayout locale={locale} pageId="home" title={title} description={description}>
-  <Section spacing="none" aria-label="Hero">
-    <ImageFrame
-      src="/mock/placeholder.svg"
-      alt={content.heroImageAlt}
-      ratio="16 / 10"
-      loading="eager"
-    />
-    <Container>
-      <div class="hero__copy">
-        <Heading level={1} size="display">{content.heroHeadline}</Heading>
-        <div class="hero__actions">
-          <PrimaryButton href={getPath("work", locale)}>
-            {copy.cta.discoverWork}
-          </PrimaryButton>
-          <EditorialLink href={getPath("contact", locale)}>
-            {copy.cta.talkProject}
+<BaseLayout
+  locale={locale}
+  pageId="home"
+  title={title}
+  description={description}
+  transparentHeaderOverHero
+>
+  <!-- HERO -->
+  <section class="hero">
+    <ImageFrame src={placeholderPhotos.a} alt={content.hero.imageAlt} fill loading="eager" />
+    <div class="hero__scrim" aria-hidden="true"></div>
+    <Container class="hero__content">
+      <div data-reveal>
+        <Heading level={1} size="display-xl">{content.hero.headline}</Heading>
+        <Text as="p" size="lg" class="hero__subline">{content.hero.subline}</Text>
+        <div class="hero__ctas">
+          <EditorialLink href={getPath("work", locale)}>
+            {content.workPreview.linkLabel}
           </EditorialLink>
+          <a class="hero__secondary-link" href={getPath("contact", locale)}>
+            {copy.cta.talkProject}
+          </a>
+        </div>
+      </div>
+    </Container>
+  </section>
+
+  <!-- WORK PREVIEW — a curated selection of media, not a Projects grid
+       (docs/decisions/ADR-003-curated-work-vs-project-model.md). -->
+  <Section aria-label={content.workPreview.label}>
+    <Container>
+      <div data-reveal>
+        <Heading level={2} size="eyebrow">{content.workPreview.label}</Heading>
+        <div class="work-mosaic">
+          {
+            content.workPreview.items.map((item) => (
+              <div class="work-mosaic__item">
+                <ImageFrame
+                  src={placeholderPhotos[item.imageKey]}
+                  alt={item.alt}
+                  ratio={item.ratio}
+                  class="media-hover"
+                />
+              </div>
+            ))
+          }
+        </div>
+        <EditorialLink href={getPath("work", locale)} class="work-mosaic__link">
+          {content.workPreview.linkLabel}
+        </EditorialLink>
+      </div>
+    </Container>
+  </Section>
+
+  <!-- BRAND STATEMENT -->
+  <Section background="secondary" aria-label="Brand statement">
+    <Container>
+      <div data-reveal>
+        <Heading level={2} size="display">{content.brandStatement}</Heading>
+      </div>
+    </Container>
+  </Section>
+
+  <!-- SERVICES PREVIEW — announces the 3 universes, never a condensed
+       Services page (see Implementation Brief 002, section 9). -->
+  <Section aria-label={content.servicesPreview.label}>
+    <Container>
+      <div data-reveal>
+        <Heading level={2} size="eyebrow">{content.servicesPreview.label}</Heading>
+        <div class="services-editorial">
+          {
+            content.servicesPreview.items.map((item) => (
+              <a class="services-editorial__item" href={getPath("services", locale)}>
+                {/* alt="" deliberately: the visible heading right below
+                    already names this service, so the image is decorative
+                    in this context — not an oversight. */}
+                <ImageFrame
+                  src={placeholderPhotos[item.imageKey]}
+                  alt=""
+                  ratio="4 / 5"
+                  class="media-hover"
+                />
+                <Heading level={3} size="h3">
+                  {item.title}
+                </Heading>
+                <Text as="p" size="body" tone="secondary">
+                  {item.text}
+                </Text>
+              </a>
+            ))
+          }
         </div>
       </div>
     </Container>
   </Section>
 
-  <Section aria-label={content.workPreviewTitle}>
-    <Container>
-      <Heading level={2} size="h2">{content.workPreviewTitle}</Heading>
-      <div class="work-preview__grid">
-        {
-          content.workPreviewItems.map((item) => (
-            <ImageFrame src="/mock/placeholder.svg" alt={item.imageAlt} ratio="4 / 5" />
-          ))
-        }
+  <!-- EDITORIAL IMAGE / RESPIRATION — no text by design (section 10). -->
+  <Section spacing="none">
+    <div data-reveal>
+      <ImageFrame
+        src={placeholderPhotos.e}
+        alt={content.editorial.imageAlt}
+        ratio="21 / 9"
+        class="media-hover"
+      />
+    </div>
+  </Section>
+
+  <!-- ABOUT PREVIEW -->
+  <Section aria-label={content.aboutPreview.label}>
+    <Container class="about-preview">
+      <div class="about-preview__media" data-reveal>
+        <ImageFrame
+          src={placeholderPhotos.d}
+          alt={content.aboutPreview.imageAlt}
+          ratio="4 / 5"
+          class="media-hover"
+        />
+      </div>
+      <div class="about-preview__copy" data-reveal>
+        <Heading level={2} size="eyebrow">{content.aboutPreview.label}</Heading>
+        <Text as="p" size="lg">{content.aboutPreview.text}</Text>
+        <EditorialLink href={getPath("about", locale)}>
+          {copy.cta.discoverAbout}
+        </EditorialLink>
       </div>
     </Container>
   </Section>
 
-  <Section background="secondary" aria-label="Brand statement">
-    <Container>
-      <Heading level={2} size="display">{content.brandStatement}</Heading>
-    </Container>
-  </Section>
-
-  <Section aria-label={content.servicesPreviewTitle}>
-    <Container>
-      <Heading level={2} size="h2">{content.servicesPreviewTitle}</Heading>
-      <div class="services-preview__grid">
-        {
-          content.servicesPreviewItems.map((item) => (
-            <div class="services-preview__item">
-              <ImageFrame src="/mock/placeholder.svg" alt={item.imageAlt} ratio="3 / 4" />
-              <Text as="p" size="lg">
-                {item.title}
-              </Text>
-            </div>
-          ))
-        }
-      </div>
-    </Container>
-  </Section>
-
-  <Section spacing="none" aria-label="Editorial">
-    <ImageFrame src="/mock/placeholder.svg" alt={content.editorialImageAlt} ratio="21 / 9" />
-  </Section>
-
-  <Section aria-label={content.aboutPreviewTitle}>
-    <Container>
-      <Heading level={2} size="h2">{content.aboutPreviewTitle}</Heading>
-      <Text as="p" size="lg" class="about-preview__text">
-        {content.aboutPreviewText}
-      </Text>
-      <EditorialLink href={getPath("about", locale)}>{copy.nav.about}</EditorialLink>
-    </Container>
-  </Section>
-
+  <!-- FINAL CONTACT CTA -->
   <Section background="secondary" aria-label="Contact">
     <Container>
-      <Heading level={2} size="display">{content.ctaHeadline}</Heading>
-      <PrimaryButton href={getPath("contact", locale)}>
-        {copy.cta.talkProject}
-      </PrimaryButton>
+      <div data-reveal>
+        <Heading level={2} size="display">{content.finalCta.headline}</Heading>
+        <EditorialLink href={getPath("contact", locale)} class="final-cta__link">
+          {copy.cta.contactUs}
+        </EditorialLink>
+      </div>
     </Container>
   </Section>
 </BaseLayout>
 
+<script>
+  const revealTargets = document.querySelectorAll<HTMLElement>("[data-reveal]");
+  const prefersReducedMotion = window.matchMedia(
+    "(prefers-reduced-motion: reduce)",
+  ).matches;
+
+  if (prefersReducedMotion || !("IntersectionObserver" in window)) {
+    revealTargets.forEach((el) => el.classList.add("is-visible"));
+  } else {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (entry.isIntersecting) {
+            entry.target.classList.add("is-visible");
+            observer.unobserve(entry.target);
+          }
+        }
+      },
+      { threshold: 0.15 },
+    );
+    revealTargets.forEach((el) => observer.observe(el));
+  }
+</script>
+
 <style>
-  .hero__copy {
-    margin-top: var(--space-12);
-    max-width: 40rem;
+  /* HERO */
+  .hero {
+    position: relative;
+    min-height: min(88vh, 900px);
+    display: flex;
+    align-items: flex-end;
+    overflow: hidden;
+    background: var(--color-bg-secondary);
   }
 
-  .hero__actions {
+  .hero__scrim {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      to top,
+      rgba(0, 0, 0, 0.75) 0%,
+      rgba(0, 0, 0, 0.25) 45%,
+      rgba(0, 0, 0, 0.05) 75%
+    );
+  }
+
+  :global(.hero__content) {
+    position: relative;
+    z-index: 1;
+    padding-block: var(--space-16);
+  }
+
+  .hero__content > div {
+    max-width: 44rem;
+  }
+
+  :global(.hero__subline) {
+    margin-top: var(--space-4);
+    color: var(--color-text-primary);
+    max-width: 32rem;
+  }
+
+  .hero__ctas {
     margin-top: var(--space-8);
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: var(--space-6);
+    gap: var(--space-8);
   }
 
-  .work-preview__grid,
-  .services-preview__grid {
+  .hero__secondary-link {
+    font-family: var(--font-sans);
+    font-size: var(--text-small);
+    color: var(--color-text-secondary);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+
+  .hero__secondary-link:hover,
+  .hero__secondary-link:focus-visible {
+    color: var(--color-text-primary);
+  }
+
+  @media (max-width: 767px) {
+    .hero {
+      min-height: 78vh;
+      align-items: flex-end;
+    }
+
+    .hero__content > div {
+      max-width: none;
+    }
+  }
+
+  /* WORK PREVIEW MOSAIC */
+  .work-mosaic {
     margin-top: var(--space-8);
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: 1fr;
     gap: var(--space-6);
   }
 
-  .services-preview__item {
+  /* :global() — passed to the child EditorialLink component. */
+  :global(.work-mosaic__link) {
+    margin-top: var(--space-8);
+    display: inline-flex;
+  }
+
+  @media (min-width: 768px) {
+    .work-mosaic {
+      grid-template-columns: repeat(4, 1fr);
+    }
+
+    .work-mosaic__item:nth-child(1) {
+      grid-column: span 4;
+    }
+    .work-mosaic__item:nth-child(2) {
+      grid-column: span 2;
+    }
+    .work-mosaic__item:nth-child(3) {
+      grid-column: span 2;
+    }
+    .work-mosaic__item:nth-child(4) {
+      grid-column: span 2;
+    }
+    .work-mosaic__item:nth-child(5) {
+      grid-column: span 2;
+    }
+    .work-mosaic__item:nth-child(6) {
+      grid-column: span 4;
+    }
+  }
+
+  @media (min-width: 1024px) {
+    .work-mosaic {
+      grid-template-columns: repeat(6, 1fr);
+    }
+
+    .work-mosaic__item:nth-child(1) {
+      grid-column: span 3;
+    }
+    .work-mosaic__item:nth-child(2) {
+      grid-column: span 3;
+    }
+    .work-mosaic__item:nth-child(3) {
+      grid-column: span 2;
+    }
+    .work-mosaic__item:nth-child(4) {
+      grid-column: span 2;
+    }
+    .work-mosaic__item:nth-child(5) {
+      grid-column: span 2;
+    }
+    .work-mosaic__item:nth-child(6) {
+      grid-column: span 6;
+    }
+  }
+
+  /* SERVICES PREVIEW — editorial, not cards */
+  .services-editorial {
+    margin-top: var(--space-8);
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: var(--space-12);
+  }
+
+  .services-editorial__item {
     display: flex;
     flex-direction: column;
-    gap: var(--space-3);
+    gap: var(--space-4);
+    text-decoration: none;
   }
 
-  /* :global() — passed to the child Text component. */
-  :global(.about-preview__text) {
-    margin-block: var(--space-6);
-    max-width: 36rem;
+  .services-editorial__item :global(.heading) {
+    transition: color var(--transition-fast);
   }
 
-  @media (max-width: 768px) {
-    .work-preview__grid,
-    .services-preview__grid {
-      grid-template-columns: 1fr;
+  .services-editorial__item:hover :global(.heading),
+  .services-editorial__item:focus-visible :global(.heading) {
+    color: var(--color-accent-warm);
+  }
+
+  @media (min-width: 1024px) {
+    .services-editorial {
+      grid-template-columns: repeat(3, 1fr);
+      gap: var(--space-8);
     }
+
+    .services-editorial__item:nth-child(2) {
+      margin-top: var(--space-16);
+    }
+  }
+
+  /* ABOUT PREVIEW */
+  :global(.about-preview) {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: var(--space-8);
+    align-items: center;
+  }
+
+  .about-preview__copy {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-4);
+  }
+
+  @media (min-width: 1024px) {
+    :global(.about-preview) {
+      grid-template-columns: 5fr 7fr;
+      gap: var(--space-16);
+    }
+  }
+
+  /* FINAL CTA — :global() — passed to the child EditorialLink component. */
+  :global(.final-cta__link) {
+    margin-top: var(--space-8);
   }
 </style>

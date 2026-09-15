@@ -10,9 +10,21 @@ interface Props {
   pageId: PageId;
   title: string;
   description: string;
+  /**
+   * The homepage's Hero is a full-bleed photograph right below the header
+   * (Implementation Brief 002, section 13) — pass true there only. Every
+   * other page omits this and keeps the header's current solid style.
+   */
+  transparentHeaderOverHero?: boolean;
 }
 
-const { locale, pageId, title, description } = Astro.props;
+const {
+  locale,
+  pageId,
+  title,
+  description,
+  transparentHeaderOverHero = false,
+} = Astro.props;
 const copy = t(locale);
 const paths = getAllPathsFor(pageId);
 const siteUrl = Astro.site?.toString().replace(/\/$/, "") ?? "";
@@ -45,7 +57,7 @@ const skipLinkLabel = locale === "fr" ? "Aller au contenu" : "Skip to content";
   <body>
     <a class="skip-link" href="#main">{skipLinkLabel}</a>
 
-    <Header locale={locale} pageId={pageId} />
+    <Header locale={locale} pageId={pageId} transparentOverHero={transparentHeaderOverHero} />
 
     <main id="main">
       <slot />

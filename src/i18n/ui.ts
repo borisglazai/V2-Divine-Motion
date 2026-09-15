@@ -19,6 +19,8 @@ export const ui = {
     cta: {
       discoverWork: "Découvrir notre travail",
       talkProject: "Parler de votre projet",
+      discoverAbout: "Découvrir Divine Motion",
+      contactUs: "Nous contacter",
     },
     footer: {
       privacy: "Confidentialité",
@@ -55,6 +57,8 @@ export const ui = {
     cta: {
       discoverWork: "Discover our work",
       talkProject: "Talk about your project",
+      discoverAbout: "Discover Divine Motion",
+      contactUs: "Contact us",
     },
     footer: {
       privacy: "Privacy",

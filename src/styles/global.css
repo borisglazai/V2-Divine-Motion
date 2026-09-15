@@ -106,3 +106,39 @@ body {
   max-width: 100%;
   overflow-x: hidden;
 }
+
+/*
+  Scroll reveal + image hover motion (discreet only — Implementation
+  Brief 002, section 18). Both utilities are reusable across future
+  pages, not homepage-only, so they live in global.css rather than a
+  page-scoped <style> block.
+*/
+@media (prefers-reduced-motion: no-preference) {
+  [data-reveal] {
+    opacity: 0;
+    transform: translateY(20px);
+    transition:
+      opacity 700ms ease,
+      transform 700ms ease;
+  }
+
+  [data-reveal].is-visible {
+    opacity: 1;
+    transform: none;
+  }
+
+  .media-hover img {
+    transition: transform var(--transition-slow);
+  }
+
+  .media-hover:hover img,
+  .media-hover:focus-visible img {
+    transform: scale(1.03);
+  }
+}
+
+/* prefers-reduced-motion: reduce (or no support for the query) — content
+   is simply visible immediately, no transform, no transition. */
+[data-reveal] {
+  opacity: 1;
+}

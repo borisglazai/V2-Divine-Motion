@@ -8,9 +8,11 @@ import MobileNav from "./MobileNav.astro";
 interface Props {
   locale: "fr" | "en";
   pageId: PageId;
+  /** See BaseLayout.astro — only the homepage passes true. */
+  transparentOverHero?: boolean;
 }
 
-const { locale, pageId } = Astro.props;
+const { locale, pageId, transparentOverHero = false } = Astro.props;
 const copy = t(locale);
 
 const links: { id: PageId; label: string }[] = [
@@ -21,7 +23,7 @@ const links: { id: PageId; label: string }[] = [
 ];
 ---
 
-<header class="header">
+<header class:list={["header", { "header--transparent": transparentOverHero }]}>
   <Container class="header__inner" as="div">
     <a class="header__wordmark" href={getPath("home", locale)}>
       {copy.siteName}
@@ -62,6 +64,19 @@ const links: { id: PageId; label: string }[] = [
 
 <MobileNav locale={locale} pageId={pageId} />
 
+<script>
+  // No-op on every page except the homepage's transparent-over-hero header.
+  const header = document.querySelector<HTMLElement>(".header--transparent");
+  if (header) {
+    const SCROLL_THRESHOLD = 40;
+    const updateScrolledState = () => {
+      header.classList.toggle("is-scrolled", window.scrollY > SCROLL_THRESHOLD);
+    };
+    updateScrolledState();
+    window.addEventListener("scroll", updateScrolledState, { passive: true });
+  }
+</script>
+
 <style>
   .header {
     position: sticky;
@@ -70,6 +85,42 @@ const links: { id: PageId; label: string }[] = [
     background: color-mix(in srgb, var(--color-bg-primary) 92%, transparent);
     backdrop-filter: blur(6px);
     border-bottom: var(--border-width) solid var(--color-border);
+    transition:
+      background var(--transition-base),
+      border-color var(--transition-base);
+  }
+
+  /* Floats transparently over the Hero photograph until the visitor
+     scrolls, per Implementation Brief 002 section 13 — a small,
+     prop-gated addition; every other page never sets this class and
+     keeps today's default solid header untouched. */
+  .header--transparent {
+    background: transparent;
+    backdrop-filter: none;
+    border-bottom-color: transparent;
+    position: absolute;
+    top: 0;
+    inset-inline: 0;
+  }
+
+  .header--transparent::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    background: linear-gradient(to bottom, rgba(0, 0, 0, 0.45), transparent);
+    pointer-events: none;
+  }
+
+  .header--transparent.is-scrolled {
+    position: sticky;
+    background: color-mix(in srgb, var(--color-bg-primary) 92%, transparent);
+    backdrop-filter: blur(6px);
+    border-bottom-color: var(--color-border);
+  }
+
+  .header--transparent.is-scrolled::before {
+    display: none;
   }
 
   .header :global(.header__inner) {

@@ -15,6 +15,12 @@ interface Props {
   focalY?: number;
   objectFit?: "cover" | "contain";
   loading?: "lazy" | "eager";
+  /**
+   * Fills the parent box instead of sizing itself via `ratio` — for a
+   * hero whose height is set by the viewport (e.g. `min-height: 80vh`),
+   * not by an intrinsic image ratio. Parent needs `position: relative`.
+   */
+  fill?: boolean;
   class?: string;
 }
 
@@ -26,12 +32,13 @@ const {
   focalY = 50,
   objectFit = "cover",
   loading = "lazy",
+  fill = false,
   class: className,
 } = Astro.props;
 ---
 
 <div
-  class:list={["image-frame", className]}
+  class:list={["image-frame", { "image-frame--fill": fill }, className]}
   style={`--image-ratio: ${ratio}; --image-focal-x: ${focalX}%; --image-focal-y: ${focalY}%; --image-fit: ${objectFit};`}
 >
   <img src={src} alt={alt} loading={loading} decoding="async" />
@@ -42,6 +49,12 @@ const {
     aspect-ratio: var(--image-ratio);
     overflow: hidden;
     background: var(--color-bg-secondary);
+  }
+
+  .image-frame--fill {
+    aspect-ratio: auto;
+    position: absolute;
+    inset: 0;
   }
 
   .image-frame img {
