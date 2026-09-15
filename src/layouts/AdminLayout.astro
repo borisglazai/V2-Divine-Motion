@@ -1,0 +1,71 @@
+---
+import "@/styles/global.css";
+import type { AdminIdentity } from "@/lib/auth/access";
+import type { AdminPageId } from "@/lib/admin/nav";
+import AdminSidebar from "@/components/admin/AdminSidebar.astro";
+import AdminMobileNav from "@/components/admin/AdminMobileNav.astro";
+import AdminTopbar from "@/components/admin/AdminTopbar.astro";
+
+interface Props {
+  activeId: AdminPageId;
+  title: string;
+  identity: AdminIdentity;
+}
+
+const { activeId, title, identity } = Astro.props;
+---
+
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title} — Admin Divine Motion</title>
+    <!-- Belt-and-suspenders with the X-Robots-Tag header set in
+         src/middleware.ts for every /admin response (Brief 012 §30) —
+         a crawler that somehow ignores the header still sees this. -->
+    <meta name="robots" content="noindex, nofollow" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  </head>
+  <body class="admin-body">
+    <a class="skip-link" href="#admin-main">Aller au contenu</a>
+
+    <div class="admin-shell">
+      <AdminSidebar activeId={activeId} />
+      <AdminMobileNav activeId={activeId} email={identity.email} />
+
+      <div class="admin-shell__content">
+        <AdminTopbar title={title} email={identity.email} />
+        <main id="admin-main" class="admin-main">
+          <slot />
+        </main>
+      </div>
+    </div>
+  </body>
+</html>
+
+<style>
+  .admin-body {
+    background: var(--color-bg-primary);
+  }
+
+  .admin-shell {
+    display: flex;
+    min-height: 100vh;
+  }
+
+  .admin-shell__content {
+    flex-grow: 1;
+    min-width: 0;
+  }
+
+  .admin-main {
+    padding: var(--space-6) var(--space-4);
+  }
+
+  @media (min-width: 1024px) {
+    .admin-main {
+      padding: var(--space-8);
+    }
+  }
+</style>

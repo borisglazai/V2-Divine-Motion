@@ -50,6 +50,18 @@ Local, Staging (`staging.divinemotion.ca`), Production (`divinemotion.ca`, `admi
 
 Cloudflare Access devant `/admin`. Vérification réelle de la signature du JWT Access côté Worker — jamais de confiance dans un simple en-tête HTTP non signé (voir `docs/decisions/ADR-008-security-access-jwt.md`, et le contre-exemple documenté de l'ancien projet dans `docs/ONBOARDING_REVIEW.md` section 8).
 
+## Admin Security Foundation + CMS Shell (Implementation Brief 012)
+
+`src/middleware.ts` + `src/lib/auth/` implémentent la vérification décrite ci-dessus (voir `docs/ADMIN_SECURITY.md` pour l'architecture complète, la configuration Cloudflare Access réelle et la stratégie CSRF prévue). Résumé technique :
+
+- **`jose`** (nouvelle dépendance, ^6.2.12) fait la vérification JWT elle-même (`jwtVerify` contre un JWKS) — pas de crypto maison, pas de framework d'auth complet.
+- **`src/lib/auth/access.ts` est pur** : `verifyAccessJwt(jwt, config)` reçoit `teamDomain`/`audience`/un getter JWKS optionnel en paramètres explicites, sans importer `cloudflare:workers` — même convention que la DAL (`db: D1Database` en premier paramètre partout). Ça permet de le tester sous `node --test` avec un JWKS local signé pour le test (`tests/auth/access.test.ts`), sans réseau ni runtime Workers.
+- **`src/lib/auth/env.ts`** est le seul fichier de `src/lib/auth/` qui lit `env.CF_ACCESS_TEAM_DOMAIN`/`env.CF_ACCESS_AUD` via `cloudflare:workers` — même pattern que `src/lib/db/client.ts`.
+- **`wrangler.toml` `[vars]`** porte `CF_ACCESS_TEAM_DOMAIN`/`CF_ACCESS_AUD` avec des placeholders `REPLACE_WITH_...` explicites (même traitement que le `database_id` D1) : tant qu'ils ne sont pas remplacés par de vraies valeurs, toute vérification échoue fermée (`CONFIG_MISSING`), jamais un accès par défaut.
+- **Routes admin dynamiques, jamais prerenderées** : chaque page sous `src/pages/admin/` déclare `export const prerender = false` — une route admin doit s'exécuter à chaque requête (vérification JWT + lecture D1), contrairement aux pages publiques actuelles qui restent toutes `prerender = true`.
+- **`astro preview` (mode production) force le fermé, pas d'exception locale** : vérifié empiriquement (`tests/admin/routes.test.mjs`) — un `astro build && astro preview` réel, avec les placeholders `CF_ACCESS_*` encore en place, rejette `/admin` sans JWT (401/403, `no-store`, `noindex`). Le bypass `import.meta.env.DEV` de `src/lib/auth/guard.ts` n'existe que sous `astro dev`.
+- **`workerd` (le runtime réel que `@cloudflare/vite-plugin` fait tourner pour `astro preview`) ne se termine pas toujours avec son processus parent.** `tests/admin/routes.test.mjs` a d'abord tenté un simple `SIGTERM` puis un kill de groupe de processus (`detached: true` + `-pid`) — les deux laissaient parfois un `workerd` orphelin sur le port. Correctif : parcourir l'arbre `ps` (pid/ppid) à partir du process `astro preview` et tuer chaque descendant explicitement. Un `workerd` résiduel zombie (sans port ouvert) peut occasionnellement subsister malgré ça — sans impact sur la fiabilité des tests (le port est libéré), documenté plutôt que masqué.
+
 ## Notes d'implémentation — Frontend Foundations (Implementation Brief 001)
 
 Décisions techniques réelles révélées par la première implémentation (section 31 du brief : à documenter, pas à garder implicite).

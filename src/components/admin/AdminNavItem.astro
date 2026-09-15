@@ -1,0 +1,45 @@
+---
+import type { AdminNavItem as AdminNavItemData } from "@/lib/admin/nav";
+
+interface Props {
+  item: AdminNavItemData;
+  active: boolean;
+}
+
+const { item, active } = Astro.props;
+---
+
+<li>
+  <a href={item.href} aria-current={active ? "page" : undefined} class:list={["admin-nav-item", { "is-active": active }]}>
+    {item.label}
+  </a>
+</li>
+
+<style>
+  /* Active state is never color-only (Brief 012 §27): a left border plus
+     bold weight both change, so the state survives grayscale/contrast
+     tools and isn't lost for anyone who can't distinguish the accent hue. */
+  .admin-nav-item {
+    display: block;
+    padding: var(--space-3) var(--space-4);
+    border-left: 2px solid transparent;
+    color: var(--color-text-secondary);
+    font-size: var(--text-small);
+    text-decoration: none;
+    transition:
+      color var(--transition-fast),
+      border-color var(--transition-fast);
+  }
+
+  .admin-nav-item:hover,
+  .admin-nav-item:focus-visible {
+    color: var(--color-text-primary);
+  }
+
+  .admin-nav-item.is-active {
+    color: var(--color-text-primary);
+    font-weight: 600;
+    border-left-color: var(--color-accent-warm);
+    background: color-mix(in srgb, var(--color-accent-warm) 8%, transparent);
+  }
+</style>

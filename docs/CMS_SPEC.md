@@ -58,3 +58,7 @@ Sauvegarder en brouillon → Prévisualiser (desktop/tablette/mobile) → Publie
 ## Couche de données (Implementation Brief 011)
 
 `src/lib/db/` implémente désormais le brouillon/publié, les instantanés et les droits de publication décrits ci-dessus pour `work_items`, `services` (+ `service_features`), `testimonials`, et le contenu des 5 pages (Accueil/Travail/Services/À propos/Contact, y compris les enfants d'À propos et de Services). Voir `docs/DATA_ARCHITECTURE.md` "Data Access Layer" pour l'architecture. Aucune route admin ni CMS ne l'utilise encore — cette couche est la fondation sur laquelle le futur CMS (Dashboard, Travail, Médias, Services, Témoignages, Contenu, SEO, Paramètres) s'appuiera, pas le CMS lui-même.
+
+## Socle admin + coque CMS (Implementation Brief 012)
+
+L'arborescence admin ci-dessus existe désormais comme surface réelle, protégée par Cloudflare Access (JWT vérifié cryptographiquement côté serveur — voir `docs/ADMIN_SECURITY.md`) : `/admin` (Dashboard, lecture D1 réelle via `getAdminDashboardSummary`), puis `/admin/site`, `/admin/work`, `/admin/media`, `/admin/services`, `/admin/testimonials`, `/admin/content`, `/admin/seo`, `/admin/settings` — ces huit derniers sont des placeholders « Module en préparation », sans CRUD, sans upload, sans Visual Editor. Un futur Brief CMS construira chaque module (en commençant vraisemblablement par Travail, cohérent avec le reste de cette spec) sur cette même fondation DAL + auth.

@@ -1,0 +1,11 @@
+---
+export const prerender = false;
+import AdminLayout from "@/layouts/AdminLayout.astro";
+import AdminPlaceholder from "@/components/admin/AdminPlaceholder.astro";
+
+const identity = Astro.locals.adminIdentity!;
+---
+
+<AdminLayout activeId="content" title="Contenu" identity={identity}>
+  <AdminPlaceholder moduleName="Contenu" />
+</AdminLayout>

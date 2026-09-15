@@ -1,0 +1,79 @@
+---
+interface Props {
+  title: string;
+  email: string;
+}
+
+const { title, email } = Astro.props;
+---
+
+<header class="admin-topbar">
+  <button
+    id="admin-mobile-nav-open"
+    class="admin-topbar__menu-button"
+    type="button"
+    aria-expanded="false"
+    aria-controls="admin-mobile-nav"
+    aria-label="Ouvrir le menu"
+  >
+    <span aria-hidden="true">☰</span>
+  </button>
+
+  <h1 class="admin-topbar__title">{title}</h1>
+
+  <span class="admin-topbar__email">{email}</span>
+</header>
+
+<style>
+  .admin-topbar {
+    display: flex;
+    align-items: center;
+    gap: var(--space-4);
+    min-height: 4rem;
+    padding-inline: var(--space-4);
+    border-bottom: var(--border-width) solid var(--color-border);
+    background: var(--color-bg-primary);
+    position: sticky;
+    top: 0;
+    z-index: 20;
+  }
+
+  .admin-topbar__menu-button {
+    background: none;
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-sm);
+    color: var(--color-text-primary);
+    font-size: var(--text-body-lg);
+    line-height: 1;
+    padding: var(--space-2) var(--space-3);
+    cursor: pointer;
+  }
+
+  .admin-topbar__title {
+    font-family: var(--font-sans);
+    font-weight: 600;
+    font-size: var(--text-body-lg);
+    color: var(--color-text-primary);
+    flex-grow: 1;
+  }
+
+  .admin-topbar__email {
+    display: none;
+    color: var(--color-text-discreet);
+    font-size: var(--text-small);
+  }
+
+  @media (min-width: 1024px) {
+    .admin-topbar {
+      padding-inline: var(--space-8);
+    }
+
+    .admin-topbar__menu-button {
+      display: none;
+    }
+
+    .admin-topbar__email {
+      display: inline;
+    }
+  }
+</style>

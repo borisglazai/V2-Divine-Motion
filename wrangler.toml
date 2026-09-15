@@ -44,3 +44,41 @@ migrations_dir = "migrations"
 # Production is deliberately NOT declared here. No production D1 binding,
 # no production database_id, invented or otherwise — see
 # docs/DEPLOYMENT.md and Implementation Brief 010 §26.
+
+# ---------------------------------------------------------------------------
+# Cloudflare Access — Admin Foundation (Implementation Brief 012).
+# Not secrets in Cloudflare's own model (the team domain and AUD tag both
+# travel inside the JWT itself, unlike an API token), but never real values
+# in this file regardless: local/staging need their own `[vars]`
+# (committed placeholders below); production sets its own via the
+# Cloudflare dashboard/CI secrets, never committed. See
+# docs/ADMIN_SECURITY.md for the real Access application provisioning
+# procedure (manual, run by whoever holds Cloudflare Access — not done by
+# this brief).
+#
+# CF_ACCESS_TEAM_DOMAIN — the Cloudflare Access team domain (e.g.
+# "divinemotion.cloudflareaccess.com"). src/lib/auth/access.ts derives both
+# the expected JWT issuer ("https://<team-domain>") and the JWKS URL
+# ("https://<team-domain>/cdn-cgi/access/certs") from it — never hardcoded.
+# CF_ACCESS_AUD — the Access application's Audience (AUD) tag, checked
+# against the JWT's `aud` claim.
+#
+# The placeholders below are deliberately not a real Cloudflare hostname:
+# with no real Access application behind them, JWT verification against
+# them always fails closed (a JWKS fetch that can never succeed) — there is
+# no usable bypass through these values. The only way into /admin locally
+# is the strict `import.meta.env.DEV` mock-identity bypass in
+# src/lib/auth/guard.ts, which Vite statically compiles to `false` (and
+# therefore removes) in any `astro build` — see docs/ADMIN_SECURITY.md.
+# ---------------------------------------------------------------------------
+[vars]
+CF_ACCESS_TEAM_DOMAIN = "REPLACE_WITH_REAL_TEAM_DOMAIN.cloudflareaccess.com"
+CF_ACCESS_AUD = "REPLACE_WITH_REAL_ACCESS_APPLICATION_AUD_TAG"
+
+[env.staging.vars]
+CF_ACCESS_TEAM_DOMAIN = "REPLACE_WITH_REAL_STAGING_TEAM_DOMAIN.cloudflareaccess.com"
+CF_ACCESS_AUD = "REPLACE_WITH_REAL_STAGING_ACCESS_APPLICATION_AUD_TAG"
+
+# Production Access config is deliberately NOT declared here — same
+# reasoning as the D1 section above. Set via Cloudflare dashboard
+# environment variables / secrets at deploy time, never in this file.

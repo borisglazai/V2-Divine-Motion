@@ -1,0 +1,60 @@
+---
+// Dynamic: this route needs a per-request Cloudflare Access check
+// (src/middleware.ts) and a real D1 read — never prerendered (Brief 012's
+// "route admin → auth vérifiée → binding DB → DAL → D1 → rendu" proof
+// only makes sense at request time).
+export const prerender = false;
+
+import AdminLayout from "@/layouts/AdminLayout.astro";
+import StatCard from "@/components/admin/StatCard.astro";
+import { getDb } from "@/lib/db/client";
+import { getAdminDashboardSummary } from "@/lib/db/admin";
+
+// Set by src/middleware.ts after a successful requireAdmin() — this page
+// never renders without it (the middleware returns 401/403 first).
+const identity = Astro.locals.adminIdentity!;
+
+let summary: Awaited<ReturnType<typeof getAdminDashboardSummary>> | null = null;
+let dbUnavailable = false;
+try {
+  summary = await getAdminDashboardSummary(getDb());
+} catch (err) {
+  // Error boundary (Brief 012 §28): never leak SQL/stack/config to the
+  // response — log a minimal, non-sensitive line server-side only.
+  console.error("admin dashboard: D1 read failed", err instanceof Error ? err.message : err);
+  dbUnavailable = true;
+}
+---
+
+<AdminLayout activeId="dashboard" title="Dashboard" identity={identity}>
+  {
+    dbUnavailable ? (
+      <p class="admin-db-error" role="alert">
+        Les données ne sont pas disponibles pour le moment. Réessayez dans un instant.
+      </p>
+    ) : (
+      <div class="stats-grid">
+        <StatCard label="Médias" value={summary!.mediaCount} />
+        <StatCard label="Travail (publiés)" value={summary!.workItemCount} />
+        <StatCard label="Services actifs" value={summary!.activeServiceCount} />
+        <StatCard label="Témoignages" value={summary!.testimonialCount} />
+        <StatCard label="Brouillons en attente" value={summary!.pendingDraftCount} />
+      </div>
+    )
+  }
+</AdminLayout>
+
+<style>
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
+    gap: var(--space-4);
+  }
+
+  .admin-db-error {
+    padding: var(--space-6);
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-md);
+    color: var(--color-text-secondary);
+  }
+</style>

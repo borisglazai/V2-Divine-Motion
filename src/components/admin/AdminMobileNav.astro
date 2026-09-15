@@ -1,0 +1,158 @@
+---
+import { ADMIN_NAV_ITEMS, type AdminPageId } from "@/lib/admin/nav";
+import AdminNavItem from "./AdminNavItem.astro";
+
+interface Props {
+  activeId: AdminPageId;
+  email: string;
+}
+
+const { activeId, email } = Astro.props;
+---
+
+<div id="admin-mobile-nav" class="admin-mobile-nav" hidden role="dialog" aria-modal="true" aria-label="Navigation admin">
+  <div class="admin-mobile-nav__panel">
+    <div class="admin-mobile-nav__top">
+      <span class="admin-mobile-nav__wordmark">Divine Motion</span>
+      <button id="admin-mobile-nav-close" class="admin-mobile-nav__close" type="button" aria-label="Fermer le menu">
+        <span aria-hidden="true">✕</span>
+      </button>
+    </div>
+
+    <nav aria-label="Navigation admin">
+      <ul class="admin-mobile-nav__list">
+        {ADMIN_NAV_ITEMS.map((item) => <AdminNavItem item={item} active={item.id === activeId} />)}
+      </ul>
+    </nav>
+
+    <p class="admin-mobile-nav__email">{email}</p>
+  </div>
+</div>
+
+<style>
+  .admin-mobile-nav {
+    position: fixed;
+    inset: 0;
+    z-index: 90;
+    background: var(--color-surface-admin);
+  }
+
+  .admin-mobile-nav[hidden] {
+    display: none;
+  }
+
+  .admin-mobile-nav__panel {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    padding: var(--space-6);
+  }
+
+  .admin-mobile-nav__top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: var(--space-8);
+  }
+
+  .admin-mobile-nav__wordmark {
+    font-family: var(--font-serif);
+    font-size: var(--text-h3);
+    color: var(--color-text-primary);
+  }
+
+  .admin-mobile-nav__close {
+    background: none;
+    border: none;
+    color: var(--color-text-primary);
+    font-size: 1.5rem;
+    line-height: 1;
+    padding: var(--space-2);
+    cursor: pointer;
+  }
+
+  .admin-mobile-nav__list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+  }
+
+  .admin-mobile-nav__email {
+    margin-top: auto;
+    color: var(--color-text-discreet);
+    font-size: var(--text-small);
+  }
+
+  @media (min-width: 1024px) {
+    .admin-mobile-nav {
+      display: none;
+    }
+  }
+</style>
+
+<script>
+  const nav = document.getElementById("admin-mobile-nav");
+  const openButton = document.getElementById("admin-mobile-nav-open");
+  const closeButton = document.getElementById("admin-mobile-nav-close");
+
+  const FOCUSABLE_SELECTOR =
+    'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+  function setBackgroundInert(isInert: boolean) {
+    if (!nav) return;
+    for (const el of Array.from(document.body.children)) {
+      if (el === nav) continue;
+      if (isInert) {
+        el.setAttribute("inert", "");
+      } else {
+        el.removeAttribute("inert");
+      }
+    }
+  }
+
+  function trapFocus(event: KeyboardEvent) {
+    if (!nav) return;
+    const focusable = Array.from(nav.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR));
+    if (focusable.length === 0) return;
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  }
+
+  function openNav() {
+    if (!nav) return;
+    nav.hidden = false;
+    openButton?.setAttribute("aria-expanded", "true");
+    document.body.style.overflow = "hidden";
+    setBackgroundInert(true);
+    closeButton?.focus();
+  }
+
+  function closeNav() {
+    if (!nav) return;
+    nav.hidden = true;
+    openButton?.setAttribute("aria-expanded", "false");
+    document.body.style.overflow = "";
+    setBackgroundInert(false);
+    openButton?.focus();
+  }
+
+  openButton?.addEventListener("click", openNav);
+  closeButton?.addEventListener("click", closeNav);
+
+  document.addEventListener("keydown", (event) => {
+    if (!nav || nav.hidden) return;
+    if (event.key === "Escape") {
+      closeNav();
+    } else if (event.key === "Tab") {
+      trapFocus(event);
+    }
+  });
+</script>

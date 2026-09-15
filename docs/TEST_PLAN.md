@@ -41,6 +41,12 @@ Suite dédiée (`tests/dal/dal.test.ts`, exécutée via `npm run db:test:dal`, i
 - **Media** — `getMediaUsage` reflète les références réelles ; soft delete/restore ; `softDeleteMedia` refuse (`MEDIA_IN_USE`, aucune donnée modifiée) tant qu'une référence existe (Review 011A).
 - **Settings/SEO** — mise à jour partielle (seuls les champs fournis changent), indépendance entre pages.
 
+## Admin Security Foundation (Implementation Brief 012)
+
+- **`tests/auth/access.test.ts`** (`npm run test:auth`) — les 7 scénarios requis par le brief contre un JWKS local signé pour le test (pas de réseau, pas de Cloudflare réel) : JWT absent → refus ; malformé → refus ; mauvais issuer → refus ; mauvais audience → refus ; expiré → refus ; signature invalide (même `kid`, mauvaise clé) → refus ; valide → identité retournée. Plus des cas limites : claim `email` absent, config manquante (échec fermé), extraction stricte du seul en-tête `Cf-Access-Jwt-Assertion`.
+- **`tests/dal/dal.test.ts`**, suite « admin dashboard summary » (incluse dans `npm run db:test:dal`) — `getAdminDashboardSummary` contre un vrai D1 local : chaque champ cross-vérifié par une requête SQL indépendante, plus une preuve que le compte change bien quand la donnée sous-jacente change (lecture réelle, pas figée).
+- **`tests/admin/routes.test.mjs`** (`npm run test:admin`) — preuve HTTP de bout en bout contre un vrai `astro build && astro preview` (mode production) : route publique non affectée ; `/admin` sans JWT → 401/403, aucune donnée admin ni détail interne dans la réponse, `Cache-Control: no-store`/`X-Robots-Tag: noindex, nofollow`/`X-Frame-Options: DENY` ; JWT malformé → toujours refusé ; les 8 routes placeholder protégées de la même façon. **Limite assumée** : ne couvre pas le chemin positif « JWT Access réel → Dashboard » en HTTP (nécessiterait une vraie application Cloudflare Access, hors scope) — ce chemin est prouvé par composition des deux suites précédentes. Voir `docs/ADMIN_SECURITY.md`.
+
 ## Retiré du plan de test
 
 Tout scénario de « page projet individuelle publique » (fiche projet dédiée) est retiré — hors scope MVP (voir `docs/decisions/ADR-003-curated-work-vs-project-model.md`).

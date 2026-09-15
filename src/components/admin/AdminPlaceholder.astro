@@ -1,0 +1,36 @@
+---
+interface Props {
+  moduleName: string;
+}
+
+const { moduleName } = Astro.props;
+---
+
+<div class="admin-placeholder">
+  <p class="admin-placeholder__text">Module en préparation — {moduleName}</p>
+  <p class="admin-placeholder__note">
+    La lecture/écriture réelle de ce module arrive dans un prochain Implementation Brief CMS (voir
+    docs/ROADMAP.md).
+  </p>
+</div>
+
+<style>
+  .admin-placeholder {
+    padding: var(--space-12) var(--space-6);
+    border: 1px dashed var(--color-border);
+    border-radius: var(--radius-md);
+    text-align: center;
+  }
+
+  .admin-placeholder__text {
+    font-family: var(--font-serif);
+    font-size: var(--text-h3);
+    color: var(--color-text-primary);
+    margin-bottom: var(--space-2);
+  }
+
+  .admin-placeholder__note {
+    color: var(--color-text-secondary);
+    font-size: var(--text-small);
+  }
+</style>

@@ -18,13 +18,16 @@
     "db:seed:local": "wrangler d1 execute DB --local --file=seeds/local.sql",
     "db:test:invariants": "node --test tests/db/invariants.test.mjs",
     "db:test:dal": "node --import tsx --test tests/dal/dal.test.ts",
-    "db:test": "npm run db:test:invariants && npm run db:test:dal"
+    "db:test": "npm run db:test:invariants && npm run db:test:dal",
+    "test:auth": "node --import tsx --test tests/auth/access.test.ts",
+    "test:admin": "node --test tests/admin/routes.test.mjs"
   },
   "dependencies": {
     "@astrojs/cloudflare": "^14.3.1",
     "@fontsource-variable/manrope": "^5.3.0",
     "@fontsource/instrument-serif": "^5.3.0",
-    "astro": "^7.3.2"
+    "astro": "^7.3.2",
+    "jose": "^6.2.12"
   },
   "devDependencies": {
     "@astrojs/check": "^0.9.4",

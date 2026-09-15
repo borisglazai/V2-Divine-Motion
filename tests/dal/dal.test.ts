@@ -11,6 +11,7 @@ import { before, after, describe, test } from "node:test";
 import assert from "node:assert/strict";
 import { resetTestDb, seedTestDb, closeTestDb } from "./harness";
 
+import * as admin from "../../src/lib/db/admin";
 import * as media from "../../src/lib/db/media";
 import * as work from "../../src/lib/db/work";
 import * as services from "../../src/lib/db/services";
@@ -539,5 +540,65 @@ describe("settings and SEO", () => {
     assert.equal(row!.title_fr, "Titre modifié");
     const homeRow = await seo.getPageSeo(db, "home");
     assert.notEqual(homeRow!.title_fr, "Titre modifié", "other pages must be untouched");
+  });
+});
+
+// Implementation Brief 012 — the Dashboard's one dedicated DAL read.
+// Placed last deliberately: it cross-checks against the D1 state as it
+// stands after every prior describe block has run, rather than assuming
+// any particular seed count.
+describe("admin dashboard summary (Brief 012)", () => {
+  const DRAFT_SHADOW_TABLES = [
+    "work_items",
+    "services",
+    "testimonials",
+    "home_content",
+    "work_page_content",
+    "services_page_content",
+    "about_content",
+    "contact_content",
+  ];
+
+  async function countWhere(sql: string): Promise<number> {
+    const row = await db.prepare(sql).first<{ count: number }>();
+    return row!.count;
+  }
+
+  test("every field matches an independent raw-SQL count — proves the summary reads real D1, not a mock", async () => {
+    const summary = await admin.getAdminDashboardSummary(db);
+
+    assert.equal(summary.mediaCount, await countWhere(`SELECT COUNT(*) AS count FROM media WHERE deleted_at IS NULL`));
+    assert.equal(
+      summary.workItemCount,
+      await countWhere(`SELECT COUNT(*) AS count FROM work_items WHERE status = 'published'`),
+    );
+    assert.equal(
+      summary.activeServiceCount,
+      await countWhere(`SELECT COUNT(*) AS count FROM services WHERE status = 'published' AND is_active = 1`),
+    );
+    assert.equal(
+      summary.testimonialCount,
+      await countWhere(`SELECT COUNT(*) AS count FROM testimonials WHERE status = 'published' AND deleted_at IS NULL`),
+    );
+
+    let expectedDrafts = 0;
+    for (const table of DRAFT_SHADOW_TABLES) {
+      expectedDrafts += await countWhere(`SELECT COUNT(*) AS count FROM ${table} WHERE status = 'draft'`);
+    }
+    assert.equal(summary.pendingDraftCount, expectedDrafts);
+  });
+
+  test("the count changes when the underlying data changes — proves a live read, not a cached/static value", async () => {
+    const before = await admin.getAdminDashboardSummary(db);
+
+    const created = await media.createMediaMetadata(db, {
+      storageKey: "media/dal-dashboard-proof.jpg",
+      mimeType: "image/jpeg",
+      sizeBytes: 100,
+    });
+    assert.equal(created.ok, true);
+
+    const after = await admin.getAdminDashboardSummary(db);
+    assert.equal(after.mediaCount, before.mediaCount + 1);
   });
 });

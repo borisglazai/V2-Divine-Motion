@@ -1,6 +1,6 @@
 # Deployment — Divine Motion V2
 
-**Statut :** fondation D1 uniquement (Implementation Brief 010). Ce document couvre la persistance (D1/migrations) et la configuration Cloudflare qui en découle. Le déploiement applicatif complet (Worker, R2, Cloudflare Images, Access, Turnstile, email transactionnel) n'est pas encore construit — voir `docs/ROADMAP.md` pour le séquencement des phases.
+**Statut :** fondation D1 (Implementation Brief 010) + socle admin/Cloudflare Access (Implementation Brief 012). Ce document couvre la persistance (D1/migrations) et la configuration Cloudflare Access qui en découlent. Le déploiement applicatif complet (Worker, R2, Cloudflare Images, Turnstile, email transactionnel) n'est pas encore construit — voir `docs/ROADMAP.md` pour le séquencement des phases.
 
 ## Environnements
 
@@ -50,10 +50,14 @@ npm run db:seed:local        # seed non destructif (seeds/local.sql) — à lanc
 npm run db:test              # suite d'invariants contre un D1 local isolé (.wrangler-test/, séparé de la base de dev)
 ```
 
+## Cloudflare Access — configuration (`wrangler.toml`, Implementation Brief 012)
+
+`CF_ACCESS_TEAM_DOMAIN`/`CF_ACCESS_AUD` sont déclarées en `[vars]` (local) et `[env.staging.vars]` (staging), avec des placeholders `REPLACE_WITH_...` explicites — aucune application Cloudflare Access réelle n'a été provisionnée par cette session. Procédure complète de configuration : `docs/ADMIN_SECURITY.md`. Tant que les placeholders restent en place, toute route `/admin` échoue fermée (403 `CONFIG_MISSING`), jamais un accès par défaut.
+
 ## Secrets
 
-Aucun secret dans ce dépôt. `wrangler.toml` ne contient que des identifiants de configuration non sensibles (noms de binding, placeholders explicitement documentés). Les vrais `database_id` de staging/production, et tout futur secret (Turnstile, email transactionnel, Cloudflare Access), sont à gérer via les mécanismes Cloudflare (`wrangler secret`, variables d'environnement CI) — pas encore configurés, hors scope de ce brief.
+Aucun secret dans ce dépôt. `wrangler.toml` ne contient que des identifiants de configuration non sensibles (noms de binding, placeholders explicitement documentés — y compris `CF_ACCESS_TEAM_DOMAIN`/`CF_ACCESS_AUD`, non secrets au sens Cloudflare mais tout de même jamais des valeurs réelles ici). Les vrais `database_id` de staging/production, la vraie configuration Cloudflare Access de staging/production, et tout futur secret (Turnstile, email transactionnel), sont à gérer via les mécanismes Cloudflare (`wrangler secret`, variables d'environnement CI) — pas encore configurés, hors scope de ce brief.
 
 ## Ce qui N'est PAS encore déployable
 
-Aucun Worker applicatif ne lit `env.DB` à ce stade (Brief 010 est une fondation, pas une connexion). Rien dans ce document ne décrit un déploiement du site public ou de l'admin — voir `docs/ROADMAP.md` Phases 5+ pour la suite.
+Aucun Worker applicatif de production ne lit `env.DB`/Cloudflare Access réel à ce stade — Brief 010 est une fondation D1, Brief 012 un socle admin/auth, ni l'un ni l'autre une connexion à une infrastructure Cloudflare réelle. `/admin` existe et est protégée, mais reste un Dashboard en lecture seule + des placeholders (voir `docs/CMS_SPEC.md`) : aucun CRUD, aucun upload, aucun Visual Editor. Rien dans ce document ne décrit un déploiement réel du site public ou de l'admin — voir `docs/ROADMAP.md` Phases 5+ pour la suite.
