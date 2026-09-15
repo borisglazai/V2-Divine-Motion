@@ -52,7 +52,13 @@ const content = servicesMock[locale];
               />
             </div>
             <div class="service__copy">
-              <Heading level={3} size="eyebrow">
+              {/* level=2, not 3: an eyebrow label sits alongside the
+                  service title (also level=2) as a sibling, matching the
+                  eyebrow-label pattern used everywhere else on the site
+                  (Home, About, Contact, Privacy) — level=3 here would
+                  appear before any h2 in the section, breaking heading
+                  order. */}
+              <Heading level={2} size="eyebrow">
                 {service.label}
               </Heading>
               <Heading level={2} size={service.layout === "wide-offset" ? "h1" : "h2"}>

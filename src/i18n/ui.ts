@@ -17,7 +17,6 @@ export const ui = {
     menuOpen: "Menu",
     menuClose: "Fermer",
     cta: {
-      discoverWork: "Découvrir notre travail",
       talkProject: "Parler de votre projet",
       discoverAbout: "Découvrir Divine Motion",
       contactUs: "Nous contacter",
@@ -57,7 +56,6 @@ export const ui = {
     menuOpen: "Menu",
     menuClose: "Close",
     cta: {
-      discoverWork: "Discover our work",
       talkProject: "Talk about your project",
       discoverAbout: "Discover Divine Motion",
       contactUs: "Contact us",
