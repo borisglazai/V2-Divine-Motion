@@ -1,3 +1,19 @@
+# MISE À JOUR OFFICIELLE — 15 septembre 2026 (Phases 0, 1, 2 finalisées)
+
+Ce document a été mis à jour pour refléter les décisions produit/UX/design finalisées après l'Onboarding Review. Le texte original du brief (ci-dessous, section 0 et suivantes) reste conservé tel quel pour traçabilité, conformément au principe « pas de modification silencieuse » (section 78). Les points suivants le remplacent ou le précisent explicitement :
+
+- **Sections 11 et 14-15 (Architecture publique / Page Travail / Projet individuel) — REMPLACÉES.** Le MVP n'est plus construit autour d'un modèle « Projects » avec pages individuelles. La page Travail devient une **vitrine éditoriale curatée** : Médiathèque → Sélection de médias → Page Travail. Les pages projet individuelles sont retirées du MVP. Voir `docs/decisions/ADR-003-curated-work-vs-project-model.md`, `docs/CMS_SPEC.md` et `docs/INFORMATION_ARCHITECTURE.md`.
+- **Sections 40-41 (Modèle Projet / Galerie projet) — REMPLACÉES** par le modèle conceptuel `work_items` documenté dans `docs/CMS_SPEC.md`. Le schéma définitif reste à trancher en Phase 4, y compris un point non résolu : l'équivalent du garde-fou « autorisation de publication » (section 21 ci-dessous) n'a pas encore été reporté sur `work_items`.
+- **Section 22 (Design System, couleurs) — REMPLACÉE.** Direction visuelle validée : **Dark Editorial**. Palette de référence dans `docs/DESIGN_SYSTEM.md`.
+- **Section 23 (Typographie) — PRÉCISÉE.** Première combinaison à tester : Instrument Serif (display) + Manrope (interface), encore challengeable en finalisation Phase 2. La logique (serif = émotion, sans-serif = information) reste la règle durable.
+- **Section 28 (Architecture admin) — REMPLACÉE.** Le module « Projets » n'est plus central. Nouvelle arborescence CMS : Dashboard, Modifier le site, Travail, Médias, Services, Témoignages, Contenu (Accueil/À propos/Contact), SEO, Paramètres. Voir `docs/CMS_SPEC.md`.
+- **Section 12 (Bilinguisme) — PRÉCISÉE.** Ajout des routes `/confidentialite` et `/en/privacy`. Règle explicite : une page ne mélange jamais les langues ; un contenu EN incomplet n'est pas publié en EN (indépendamment du statut FR). Voir `docs/decisions/ADR-007-bilingual-i18n.md`.
+- **Section 9 (Git/CI) — COMPLÉTÉE.** Pipeline CI minimale explicitement actée : install, lint, typecheck, tests, build sur chaque Pull Request ; aucun merge si un contrôle échoue. Voir `docs/decisions/ADR-010-ci-pipeline.md`.
+
+Le détail complet des décisions produit/UX/design est dans les documents listés dans `README.md`, et les décisions structurantes sont actées dans `/docs/decisions` (ADR). Le texte ci-dessous est conservé tel quel comme référence historique du cadrage initial (version 2.0, septembre 2026).
+
+---
+
 # DIVINE MOTION V2
 ## MASTER PROJECT BRIEF — CLAUDE CODE
 
@@ -183,7 +199,7 @@ L'interface doit ressembler davantage à un beau magazine visuel contemporain qu
 
 ## 10. CE QUE LE DESIGN DOIT ÉVITER
 
-Éviter : noir et or cliché, polices manuscrites wedding, cartes partout, icônes décoratives inutiles, interfaces ressemblant à un SaaS, animations spectaculaires, parallaxe excessive, sliders inutiles, carrousels automatiques, surcharge marketing, dizaines de CTA, sections qui existent uniquement pour remplir la page.
+Éviter : noir et or clichė, polices manuscrites wedding, cartes partout, icônes décoratives inutiles, interfaces ressemblant à un SaaS, animations spectaculaires, parallaxe excessive, sliders inutiles, carrousels automatiques, surcharge marketing, dizaines de CTA, sections qui existent uniquement pour remplir la page.
 
 ## 11. ARCHITECTURE PUBLIQUE
 
@@ -199,6 +215,8 @@ Navigation principale recommandée : Accueil, Travail, Services, À propos, Cont
 ```
 
 Les projets individuels ne sont pas une entrée du menu principal.
+
+> **Superseded** — voir la mise à jour en tête de ce document et `docs/decisions/ADR-003-curated-work-vs-project-model.md` : il n'y a plus de route `/travail/[projet]` au MVP.
 
 ## 12. BILINGUISME
 
@@ -247,17 +265,23 @@ L'accueil doit rester relativement court.
 
 **CTA final** — Grande image, courte phrase, CTA : « Parler de votre projet ».
 
+> **Précisé** par la mise à jour du 15 septembre 2026 — voir `docs/UX_FLOWS.md` pour la structure finale de l'accueil.
+
 ## 14. PAGE TRAVAIL
 
 Cœur du portfolio. Chaque élément correspond à un PROJET, non simplement à une photographie (mariage, séance urbaine, anniversaire, portrait, événement).
 
 Filtres possibles : Tout, Mariages, Portraits & Lifestyle, Événements — uniquement lorsque le volume le justifie.
 
+> **Superseded** — voir la mise à jour en tête de ce document. Travail est désormais une vitrine curatée de médias sélectionnés (`work_items`), pas une accumulation de projets. Voir `docs/CMS_SPEC.md` et ADR-003.
+
 ## 15. PROJET INDIVIDUEL
 
 Une page projet doit raconter une histoire : couverture, titre, catégorie, date, lieu, texte très court, galerie, séquençage visuel, vidéo éventuelle, projet suivant, CTA contact.
 
 L'ordre des médias doit pouvoir être contrôlé manuellement.
+
+> **Superseded — retiré du MVP.** Les pages projet individuelles n'existent plus au MVP (voir ADR-003). Une fonctionnalité « Stories / Histoires » pourra éventuellement réintroduire des pages narratives plus tard ; elle est hors scope aujourd'hui.
 
 ## 16. SERVICES
 
@@ -273,6 +297,8 @@ Formulaire volontairement court : nom, courriel, téléphone facultatif, type de
 
 Le formulaire doit être simple, rassurant, accessible, sécurisé, protégé contre le spam.
 
+> **Précisé** — le champ « type de projet » devient « type de prestation » avec options fermées (Mariage / Portrait-Lifestyle / Événement / Autre). Voir `docs/UX_FLOWS.md`.
+
 ## 19. CONFIDENTIALITÉ
 
 La conformité à la protection des renseignements personnels fait partie du produit ; elle ne doit pas être ajoutée après le développement.
@@ -280,6 +306,8 @@ La conformité à la protection des renseignements personnels fait partie du pro
 Le MVP doit prévoir : politique de confidentialité publique, collecte minimale, information claire au formulaire, conservation limitée, suppression lorsque nécessaire, protection des données, documentation des traitements.
 
 Une analyse relative à la protection des renseignements personnels doit être menée avant la mise en production. Les choix techniques doivent tenir compte du fait que certains fournisseurs peuvent traiter des données hors Québec.
+
+> **Précisé** — routes dédiées `/confidentialite` et `/en/privacy` actées. Voir `docs/SECURITY_PRIVACY.md`.
 
 ## 20. PRINCIPE DE MINIMISATION
 
@@ -299,15 +327,21 @@ Un projet ne doit idéalement pas pouvoir être publié tant que cette autorisat
 
 Le CMS n'a pas besoin de devenir un système de contrat ; il doit simplement éviter les publications accidentelles.
 
+> **Point ouvert** — ce garde-fou doit être reporté sur le modèle `work_items` (et `testimonials`), ce qui n'a pas encore été acté explicitement dans la mise à jour du 15 septembre 2026. Voir `docs/CMS_SPEC.md`.
+
 ## 22. DESIGN SYSTEM
 
 Direction générale proposée : Fond ivoire `#F4F1EB`, Fond beige `#E8E2D8`, Texte `#181817`, Texte secondaire `#6D675F`.
 
 Ces couleurs ne sont pas encore figées tant que Phase 2 n'est pas validée.
 
+> **Superseded** — Phase 2 a validé une direction Dark Editorial. Voir `docs/DESIGN_SYSTEM.md` pour la palette actuelle.
+
 ## 23. TYPOGRAPHIE
 
 Deux familles maximum. Serif éditoriale pour grands titres/accroches/moments émotionnels. Sans-serif pour navigation/interface/corps/boutons/CMS.
+
+> **Précisé** — première combinaison proposée : Instrument Serif + Manrope. Voir `docs/DESIGN_SYSTEM.md`.
 
 ## 24. ANIMATIONS
 
@@ -323,6 +357,8 @@ Objectif : WCAG 2.2 AA. Critères testables incluant contraste, clavier, focus, 
 ## 26. RESPONSIVE
 
 Le site doit fonctionner parfaitement sur smartphone, tablette, laptop, desktop, grands écrans. Mobile ne signifie pas desktop réduit ; certaines compositions peuvent changer.
+
+> **Précisé** — grille 12/8/4 colonnes (desktop/tablette/mobile). Voir `docs/DESIGN_SYSTEM.md`.
 
 ## 27. CMS
 
@@ -340,6 +376,8 @@ Médias
 SEO
 Paramètres
 ```
+
+> **Superseded** — voir `docs/CMS_SPEC.md` pour l'arborescence actuelle (Travail remplace Projets).
 
 ## 29. ÉDITEUR VISUEL
 
@@ -436,6 +474,8 @@ projects
 
 La version finale du schéma devra être définie dans Phase 4.
 
+> **Superseded** — remplacé par le modèle `work_items`, voir `docs/CMS_SPEC.md` et ADR-003. Noter que `publication_rights_confirmed` n'a pas encore d'équivalent acté sur `work_items` — point ouvert.
+
 ## 41. GALERIE PROJET
 
 ```text
@@ -445,6 +485,8 @@ project_media
 ```
 
 L'ordre est contrôlé.
+
+> **Superseded** par `work_items` (position, caption_fr/en portés directement par l'item). Voir `docs/CMS_SPEC.md`.
 
 ## 42. TÉMOIGNAGES
 
@@ -479,6 +521,8 @@ Astro, TypeScript, Cloudflare Workers, Cloudflare D1, Cloudflare R2, Cloudflare 
 
 Elle n'est pas destinée à être changée sans raison forte. Toute proposition de changement architectural majeur doit être argumentée.
 
+> **Confirmée** par la mise à jour du 15 septembre 2026, section 29. Voir ADR-001.
+
 ## 46. ASTRO
 
 Le site est principalement contenu, photographie, SEO, pages éditoriales. JavaScript navigateur doit rester minimal. Utiliser l'interactivité uniquement lorsqu'elle apporte une valeur réelle.
@@ -498,6 +542,8 @@ R2 stocke : masters de publication, médias utilisés sur le site. Staging et pr
 ## 50. CLOUDFLARE ACCESS
 
 Admin (`admin.divinemotion.ca`) protégé par Cloudflare Access. Le simple fait de connaître l'URL ne doit pas permettre d'utiliser l'admin.
+
+> **Précisé** — vérification réelle du JWT Access côté Worker exigée explicitement. Voir ADR-008.
 
 ## 51. TURNSTILE
 
@@ -601,6 +647,8 @@ ADR-004-localization.md
 
 Structure : Décision, Contexte, Pourquoi, Alternatives, Conséquences.
 
+> **Étendu** — la liste actuelle des ADR est dans `docs/decisions/` (10 ADR au 15 septembre 2026, voir README.md).
+
 ## 68. BUT DES ADR
 
 Éviter qu'une IA ou un développeur remette inconsciemment en cause une décision prise six mois auparavant. Exemple : si Cloudflare Images a été retenu pour éviter Sharp custom, ne pas réintroduire Sharp sans proposition d'architecture explicite.
@@ -667,13 +715,13 @@ Architecture Freeze (stack stable), Design Freeze (système visuel stable), Data
 
 ## 82. PHASES DU PROJET
 
-- **PHASE 0 — GOUVERNANCE** (rôles, workflow, Git, documentation, ADR, environnements, règles) — EN COURS DE FINALISATION
-- **PHASE 1 — STRATÉGIE PRODUIT & UX** (positionnement, sitemap, pages, sections, parcours, CTA, contenu, FR/EN, contact, confidentialité, visual editor, CMS, MVP, hors scope) — ACTUELLEMENT ICI. Aucun développement final ne doit commencer.
-- **PHASE 2 — DESIGN SYSTEM** (couleurs, typo, grid, spacing, buttons, navigation, header, footer, cards, project layout, forms, animations, responsive, wireframes, maquettes — Figma pourra être utilisé)
-- **PHASE 3 — SITE PUBLIC** (frontend avec données mockées ; Accueil, Travail, Projet, Services, À propos, Contact ; valider l'expérience publique avant de construire tout le CMS)
-- **PHASE 4 — ARCHITECTURE DATA** (D1, migrations, R2, Cloudflare Images, modèles, localisation, workflow médias, sauvegarde, suppression)
-- **PHASE 5 — CMS** (Dashboard, Contenu, Projets, Services, Médias, SEO, Paramètres, Visual Editor, draft/preview/publish)
-- **PHASE 6 — CONTENU RÉEL** (vraies photos, vrais projets, vraies descriptions, témoignages, traductions, alt, SEO)
+- **PHASE 0 — GOUVERNANCE** (rôles, workflow, Git, documentation, ADR, environnements, règles) — TERMINÉE
+- **PHASE 1 — STRATÉGIE PRODUIT & UX** — FINALISÉE le 15 septembre 2026 (voir mise à jour en tête de document)
+- **PHASE 2 — DESIGN SYSTEM** — direction validée (Dark Editorial), détails dans `docs/DESIGN_SYSTEM.md`
+- **PHASE 3 — SITE PUBLIC** (frontend avec données mockées ; Accueil, Travail, Services, À propos, Contact, Confidentialité ; valider l'expérience publique avant de construire tout le CMS) — PROCHAINE ÉTAPE
+- **PHASE 4 — ARCHITECTURE DATA** (D1, migrations, R2, Cloudflare Images, modèles dont `work_items`, localisation, workflow médias, sauvegarde, suppression)
+- **PHASE 5 — CMS** (Dashboard, Contenu, Travail, Services, Médias, SEO, Paramètres, Visual Editor, draft/preview/publish)
+- **PHASE 6 — CONTENU RÉEL** (vraies photos, sélection Travail réelle, vraies descriptions, témoignages, traductions, alt, SEO)
 - **PHASE 7 — QA** (UX, responsive, navigateurs, uploads, sécurité, performance, accessibilité, SEO, publication, bilinguisme, médias, contact)
 - **PHASE 8 — STAGING FINAL** (simulation complète d'exploitation)
 - **PHASE 9 — PRODUCTION** (migration finale, DNS, domaines, email, Access, analytics, monitoring, backups, vérifications)
@@ -681,7 +729,7 @@ Architecture Freeze (stack stable), Design Freeze (système visuel stable), Data
 
 ## 83. STRATÉGIE DE TESTS
 
-Unit (logique isolée), Integration (D1/R2/API), E2E (parcours critiques), Manual QA (visuel/responsive/UX).
+Unit (logique isolée), Integration (D1/R2/API), E2E (parcours critiques), Manual QA (visuel/responsive/UX). Voir `docs/TEST_PLAN.md` pour le détail actualisé.
 
 ## 84. MÉDIAS À TESTER
 
@@ -715,11 +763,11 @@ Utilisable depuis téléphone pour les actions légères (remplacer photo, corri
 
 ## 91. FONCTIONNALITÉS HORS MVP
 
-Ne pas développer maintenant : page builder, drag-and-drop complet, éditeur CSS, CRM complet, espace client, paiement, facturation, contrats, calendrier disponibilité, réservation en ligne, galeries clients, favoris clients, application mobile, blog avancé, DAM complexe, retouche photo, IA générative CMS, personnalisation utilisateur, analytics custom, automatisation réseaux sociaux, permissions utilisateurs complexes.
+Ne pas développer maintenant : page builder, drag-and-drop complet (au sens page builder), éditeur CSS, CRM complet, espace client, paiement, facturation, contrats, calendrier disponibilité, réservation en ligne, galeries clients, favoris clients, application mobile, blog avancé, DAM complexe, retouche photo, IA générative CMS obligatoire, personnalisation utilisateur, analytics custom, automatisation réseaux sociaux, permissions utilisateurs complexes, pages projet individuelles, Stories/Histoires avancées.
 
 ## 92. POSSIBLE FUTUR
 
-À évaluer après lancement — Client (galeries privées, téléchargement, favoris) ; Commercial (devis, contrats, paiements, calendrier) ; Contenu (journal, stories, SEO éditorial) ; IA (alt text, SEO suggestions, recherche médias, assistance rédactionnelle) seulement si utile.
+À évaluer après lancement — Client (galeries privées, téléchargement, favoris) ; Commercial (devis, contrats, paiements, calendrier) ; Contenu (Stories/Histoires narratives pour mariages/événements exceptionnels, SEO éditorial) ; IA (alt text, SEO suggestions, recherche médias, assistance rédactionnelle) seulement si utile.
 
 ## 93. RÈGLE CONCERNANT L'IA
 
@@ -735,7 +783,7 @@ Le visiteur comprend rapidement : Divine Motion est professionnel, fait photo/vi
 
 ## 96. DÉFINITION DU SUCCÈS — ADMIN
 
-Divine Motion peut maintenir son site sans développeur pour textes, images, projets, services, publications, SEO simple.
+Divine Motion peut maintenir son site sans développeur pour textes, images, sélection Travail, services, publications, SEO simple.
 
 ## 97. DÉFINITION DU SUCCÈS — TECHNIQUE
 
