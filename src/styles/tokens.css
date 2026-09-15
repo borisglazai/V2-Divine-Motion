@@ -1,0 +1,83 @@
+/*
+  Design tokens — Dark Editorial (docs/DESIGN_SYSTEM.md).
+  Single fixed theme: the dark palette IS the brand identity, not a
+  light/dark preference toggle.
+*/
+:root {
+  /* Color */
+  --color-bg-primary: #101010;
+  --color-bg-secondary: #171717;
+  --color-surface-admin: #1d1d1d;
+
+  --color-text-primary: #f3f0e9;
+  --color-text-secondary: #a29d94;
+  /* Verified contrast ~4.04:1 on --color-bg-primary — below AA 4.5:1 for
+     normal text. Large text / non-text UI only (see docs/ACCESSIBILITY.md). */
+  --color-text-discreet: #77736d;
+  --color-accent-warm: #c2ae8e;
+
+  --color-border: rgba(255, 255, 255, 0.12);
+
+  /* Typography */
+  --font-serif: "Instrument Serif", Georgia, "Times New Roman", serif;
+  --font-sans:
+    "Manrope Variable", "Manrope", -apple-system, BlinkMacSystemFont, "Segoe UI",
+    sans-serif;
+
+  /* Fluid type scale (clamp: min, preferred-vw, max) */
+  --text-display-xl: clamp(3.5rem, 2rem + 6vw, 8rem); /* 56–128px */
+  --text-display: clamp(2.75rem, 1.75rem + 4.5vw, 6rem); /* 44–96px */
+  --text-h1: clamp(2.25rem, 1.6rem + 3vw, 4.5rem); /* 36–72px */
+  --text-h2: clamp(1.75rem, 1.3rem + 2vw, 3.5rem); /* 28–56px */
+  --text-h3: clamp(1.375rem, 1.1rem + 1.2vw, 2.25rem); /* 22–36px */
+  --text-body-lg: clamp(1.125rem, 1rem + 0.4vw, 1.375rem); /* 18–22px */
+  --text-body: 1rem; /* 16px */
+  --text-small: 0.875rem; /* 14px */
+  --text-micro: 0.6875rem; /* 11px */
+
+  --leading-tight: 1.05;
+  --leading-snug: 1.25;
+  --leading-normal: 1.5;
+
+  /* Spacing scale */
+  --space-1: 0.25rem; /* 4 */
+  --space-2: 0.5rem; /* 8 */
+  --space-3: 0.75rem; /* 12 */
+  --space-4: 1rem; /* 16 */
+  --space-6: 1.5rem; /* 24 */
+  --space-8: 2rem; /* 32 */
+  --space-12: 3rem; /* 48 */
+  --space-16: 4rem; /* 64 */
+  --space-24: 6rem; /* 96 */
+  --space-32: 8rem; /* 128 */
+  --space-40: 10rem; /* 160 */
+
+  /* Radii — kept minimal per Dark Editorial direction */
+  --radius-sm: 2px;
+  --radius-md: 4px;
+  --radius-none: 0px;
+
+  /* Borders */
+  --border-width: 1px;
+
+  /* Transitions — 150–400ms range, discreet motion only */
+  --transition-fast: 150ms ease;
+  --transition-base: 250ms ease;
+  --transition-slow: 400ms ease;
+
+  /* Containers */
+  --container-max: 1520px;
+  --container-gutter: var(--space-6);
+
+  /* Breakpoints (reference values — used literally in @media queries,
+     documented here for a single source of truth) */
+  --breakpoint-mobile: 375px;
+  --breakpoint-tablet: 768px;
+  --breakpoint-desktop: 1024px;
+  --breakpoint-wide: 1440px;
+
+  /* Grid */
+  --grid-columns-desktop: 12;
+  --grid-columns-tablet: 8;
+  --grid-columns-mobile: 4;
+}

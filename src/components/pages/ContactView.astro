@@ -1,0 +1,157 @@
+---
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import Container from "@/components/Container.astro";
+import Section from "@/components/Section.astro";
+import Heading from "@/components/Heading.astro";
+import Text from "@/components/Text.astro";
+import PrimaryButton from "@/components/PrimaryButton.astro";
+import { getPath, type Locale } from "@/i18n/routes";
+import { t } from "@/i18n/ui";
+
+interface Props {
+  locale: Locale;
+}
+
+const { locale } = Astro.props;
+const copy = t(locale);
+const form = copy.contactForm;
+
+const title = locale === "fr" ? "Contact" : "Contact";
+const description =
+  locale === "fr"
+    ? "Parlez-nous de votre projet — mariage, portrait ou événement."
+    : "Tell us about your project — wedding, portrait or event.";
+---
+
+<BaseLayout locale={locale} pageId="contact" title={title} description={description}>
+  <Section spacing="tight">
+    <Container class="contact">
+      <Heading level={1} size="display" id="contact-heading">{title}</Heading>
+
+      <form class="contact__form" aria-labelledby="contact-heading" data-contact-form>
+        <div class="contact__field">
+          <label for="name">{form.name}</label>
+          <input type="text" id="name" name="name" autocomplete="name" required />
+        </div>
+
+        <div class="contact__field">
+          <label for="email">{form.email}</label>
+          <input type="email" id="email" name="email" autocomplete="email" required />
+        </div>
+
+        <div class="contact__field">
+          <label for="phone">{form.phone}</label>
+          <input type="tel" id="phone" name="phone" autocomplete="tel" />
+        </div>
+
+        <div class="contact__field">
+          <label for="serviceType">{form.serviceType}</label>
+          <select id="serviceType" name="serviceType" required>
+            {form.serviceTypeOptions.map((option) => <option value={option}>{option}</option>)}
+          </select>
+        </div>
+
+        <div class="contact__field">
+          <label for="date">{form.date}</label>
+          <input type="date" id="date" name="date" />
+        </div>
+
+        <div class="contact__field">
+          <label for="location">{form.location}</label>
+          <input type="text" id="location" name="location" />
+        </div>
+
+        <div class="contact__field contact__field--full">
+          <label for="message">{form.message}</label>
+          <textarea id="message" name="message" rows="5" required></textarea>
+        </div>
+
+        <div class="contact__field contact__field--full">
+          <Text as="p" size="small" tone="secondary">
+            {form.privacyNotice}{" "}
+            <a href={getPath("privacy", locale)}>{copy.footer.privacy}</a>
+          </Text>
+        </div>
+
+        <div class="contact__field contact__field--full">
+          <PrimaryButton type="submit">{form.submit}</PrimaryButton>
+          <p class="contact__status" data-contact-status role="status" hidden></p>
+        </div>
+      </form>
+    </Container>
+  </Section>
+</BaseLayout>
+
+<script>
+  const form = document.querySelector<HTMLFormElement>("[data-contact-form]");
+  const status = document.querySelector<HTMLElement>("[data-contact-status]");
+
+  form?.addEventListener("submit", (event) => {
+    event.preventDefault();
+    // Foundations phase only: no real submission, no Turnstile yet
+    // (docs/decisions and Implementation Brief 001, section 28 — hors scope).
+    if (status) {
+      status.hidden = false;
+      status.textContent =
+        document.documentElement.lang === "fr"
+          ? "Formulaire de démonstration — l'envoi réel sera activé dans une phase ultérieure."
+          : "Demo form — real submission will be enabled in a later phase.";
+    }
+  });
+</script>
+
+<style>
+  /* :global() — passed to the child Container component. */
+  :global(.contact) {
+    max-width: 42rem;
+  }
+
+  .contact__form {
+    margin-top: var(--space-8);
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--space-6);
+  }
+
+  .contact__field--full {
+    grid-column: 1 / -1;
+  }
+
+  .contact__field {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+  }
+
+  label {
+    font-family: var(--font-sans);
+    font-size: var(--text-small);
+    color: var(--color-text-secondary);
+  }
+
+  input,
+  select,
+  textarea {
+    background: var(--color-bg-secondary);
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-sm);
+    padding: var(--space-3) var(--space-4);
+    color: var(--color-text-primary);
+  }
+
+  textarea {
+    resize: vertical;
+  }
+
+  .contact__status {
+    margin-top: var(--space-4);
+    color: var(--color-text-secondary);
+    font-size: var(--text-small);
+  }
+
+  @media (max-width: 768px) {
+    .contact__form {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>

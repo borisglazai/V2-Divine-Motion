@@ -1,0 +1,63 @@
+---
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import Container from "@/components/Container.astro";
+import Section from "@/components/Section.astro";
+import Heading from "@/components/Heading.astro";
+import Text from "@/components/Text.astro";
+import PrimaryButton from "@/components/PrimaryButton.astro";
+import ImageFrame from "@/components/ImageFrame.astro";
+import { getPath, type Locale } from "@/i18n/routes";
+import { aboutMock } from "@/data/mock/about";
+
+interface Props {
+  locale: Locale;
+}
+
+const { locale } = Astro.props;
+const content = aboutMock[locale];
+---
+
+<BaseLayout
+  locale={locale}
+  pageId="about"
+  title={content.title}
+  description={content.paragraphs[0]}
+>
+  <Section spacing="none">
+    <ImageFrame src="/mock/placeholder.svg" alt={content.heroImageAlt} ratio="16 / 9" />
+  </Section>
+
+  <Section>
+    <Container class="about__content">
+      <Heading level={1} size="display">{content.title}</Heading>
+      <div class="about__paragraphs">
+        {content.paragraphs.map((paragraph) => <Text as="p" size="lg">{paragraph}</Text>)}
+      </div>
+    </Container>
+  </Section>
+
+  <Section spacing="none">
+    <ImageFrame src="/mock/placeholder.svg" alt={content.secondImageAlt} ratio="21 / 9" />
+  </Section>
+
+  <Section background="secondary" aria-label="Contact">
+    <Container>
+      <PrimaryButton href={getPath("contact", locale)}>{content.ctaLabel}</PrimaryButton>
+    </Container>
+  </Section>
+</BaseLayout>
+
+<style>
+  /* :global() — this class is passed to the child Container component,
+     outside this file's own CSS scope. */
+  :global(.about__content) {
+    max-width: 42rem;
+  }
+
+  .about__paragraphs {
+    margin-top: var(--space-8);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-6);
+  }
+</style>

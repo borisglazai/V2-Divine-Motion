@@ -1,0 +1,140 @@
+---
+import { getPath, type PageId } from "@/i18n/routes";
+import { t } from "@/i18n/ui";
+import Container from "./Container.astro";
+import LanguageSwitcher from "./LanguageSwitcher.astro";
+import MobileNav from "./MobileNav.astro";
+
+interface Props {
+  locale: "fr" | "en";
+  pageId: PageId;
+}
+
+const { locale, pageId } = Astro.props;
+const copy = t(locale);
+
+const links: { id: PageId; label: string }[] = [
+  { id: "work", label: copy.nav.work },
+  { id: "services", label: copy.nav.services },
+  { id: "about", label: copy.nav.about },
+  { id: "contact", label: copy.nav.contact },
+];
+---
+
+<header class="header">
+  <Container class="header__inner" as="div">
+    <a class="header__wordmark" href={getPath("home", locale)}>
+      {copy.siteName}
+    </a>
+
+    <nav class="header__nav" aria-label={copy.nav.work}>
+      <ul>
+        {
+          links.map((link) => (
+            <li>
+              <a
+                href={getPath(link.id, locale)}
+                aria-current={pageId === link.id ? "page" : undefined}
+              >
+                {link.label}
+              </a>
+            </li>
+          ))
+        }
+      </ul>
+    </nav>
+
+    <div class="header__actions">
+      <LanguageSwitcher locale={locale} pageId={pageId} />
+
+      <button
+        id="mobile-nav-open"
+        class="header__menu-button"
+        type="button"
+        aria-expanded="false"
+        aria-controls="mobile-nav"
+      >
+        {copy.menuOpen}
+      </button>
+    </div>
+  </Container>
+</header>
+
+<MobileNav locale={locale} pageId={pageId} />
+
+<style>
+  .header {
+    position: sticky;
+    top: 0;
+    z-index: 80;
+    background: color-mix(in srgb, var(--color-bg-primary) 92%, transparent);
+    backdrop-filter: blur(6px);
+    border-bottom: var(--border-width) solid var(--color-border);
+  }
+
+  .header :global(.header__inner) {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-6);
+    min-height: 4.5rem;
+  }
+
+  .header__wordmark {
+    font-family: var(--font-serif);
+    font-size: var(--text-h3);
+    color: var(--color-text-primary);
+    text-decoration: none;
+    white-space: nowrap;
+  }
+
+  .header__nav {
+    display: none;
+  }
+
+  .header__nav ul {
+    display: flex;
+    gap: var(--space-8);
+  }
+
+  .header__nav a {
+    font-family: var(--font-sans);
+    font-size: var(--text-small);
+    letter-spacing: 0.02em;
+    color: var(--color-text-secondary);
+    text-decoration: none;
+    transition: color var(--transition-fast);
+  }
+
+  .header__nav a:hover,
+  .header__nav a:focus-visible,
+  .header__nav a[aria-current="page"] {
+    color: var(--color-text-primary);
+  }
+
+  .header__actions {
+    display: flex;
+    align-items: center;
+    gap: var(--space-4);
+  }
+
+  .header__menu-button {
+    background: none;
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-sm);
+    color: var(--color-text-primary);
+    font-size: var(--text-small);
+    padding: var(--space-2) var(--space-4);
+    cursor: pointer;
+  }
+
+  @media (min-width: 1024px) {
+    .header__nav {
+      display: block;
+    }
+
+    .header__menu-button {
+      display: none;
+    }
+  }
+</style>

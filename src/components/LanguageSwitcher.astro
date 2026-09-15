@@ -1,0 +1,46 @@
+---
+import { getAlternatePath, type PageId } from "@/i18n/routes";
+import { t } from "@/i18n/ui";
+
+interface Props {
+  locale: "fr" | "en";
+  pageId: PageId;
+  class?: string;
+}
+
+const { locale, pageId, class: className } = Astro.props;
+const copy = t(locale);
+const alternatePath = getAlternatePath(pageId, locale);
+---
+
+<a
+  class:list={["language-switcher", className]}
+  href={alternatePath}
+  aria-label={copy.langSwitchAria}
+  hreflang={locale === "fr" ? "en" : "fr"}
+>
+  {copy.langSwitchLabel}
+</a>
+
+<style>
+  .language-switcher {
+    font-family: var(--font-sans);
+    font-size: var(--text-small);
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    color: var(--color-text-primary);
+    text-decoration: none;
+    padding: var(--space-2) var(--space-3);
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-sm);
+    transition:
+      border-color var(--transition-fast),
+      color var(--transition-fast);
+  }
+
+  .language-switcher:hover,
+  .language-switcher:focus-visible {
+    border-color: var(--color-accent-warm);
+    color: var(--color-accent-warm);
+  }
+</style>

@@ -1,0 +1,47 @@
+---
+interface Props {
+  /** Semantic level — kept separate from visual size. */
+  level?: 1 | 2 | 3 | 4;
+  /** Visual size, independent of semantic level. */
+  size?: "display-xl" | "display" | "h1" | "h2" | "h3";
+  class?: string;
+  id?: string;
+}
+
+const { level = 2, size = "h2", class: className, id } = Astro.props;
+const Tag = `h${level}` as "h1" | "h2" | "h3" | "h4";
+---
+
+<Tag class:list={["heading", `heading--${size}`, className]} id={id}>
+  <slot />
+</Tag>
+
+<style>
+  .heading {
+    font-family: var(--font-serif);
+    font-weight: 400;
+    line-height: var(--leading-tight);
+    color: var(--color-text-primary);
+  }
+
+  .heading--display-xl {
+    font-size: var(--text-display-xl);
+  }
+
+  .heading--display {
+    font-size: var(--text-display);
+  }
+
+  .heading--h1 {
+    font-size: var(--text-h1);
+  }
+
+  .heading--h2 {
+    font-size: var(--text-h2);
+  }
+
+  .heading--h3 {
+    font-size: var(--text-h3);
+    line-height: var(--leading-snug);
+  }
+</style>

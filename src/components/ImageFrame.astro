@@ -1,0 +1,53 @@
+---
+/**
+ * Wraps a plain <img> today (mock/placeholder assets only — no media
+ * pipeline yet, see docs/decisions/ADR-005 and ADR-006). The public props
+ * (src, alt, focalX/focalY, ratio, objectFit) are the contract future
+ * phases keep when real R2/Cloudflare Images URLs replace the src.
+ */
+interface Props {
+  src: string;
+  /** Required — never decorative by default (docs/ACCESSIBILITY.md). */
+  alt: string;
+  ratio?: string;
+  /** Focal point, 0-100. Defaults to centered. */
+  focalX?: number;
+  focalY?: number;
+  objectFit?: "cover" | "contain";
+  loading?: "lazy" | "eager";
+  class?: string;
+}
+
+const {
+  src,
+  alt,
+  ratio = "3 / 2",
+  focalX = 50,
+  focalY = 50,
+  objectFit = "cover",
+  loading = "lazy",
+  class: className,
+} = Astro.props;
+---
+
+<div
+  class:list={["image-frame", className]}
+  style={`--image-ratio: ${ratio}; --image-focal-x: ${focalX}%; --image-focal-y: ${focalY}%; --image-fit: ${objectFit};`}
+>
+  <img src={src} alt={alt} loading={loading} decoding="async" />
+</div>
+
+<style>
+  .image-frame {
+    aspect-ratio: var(--image-ratio);
+    overflow: hidden;
+    background: var(--color-bg-secondary);
+  }
+
+  .image-frame img {
+    width: 100%;
+    height: 100%;
+    object-fit: var(--image-fit);
+    object-position: var(--image-focal-x) var(--image-focal-y);
+  }
+</style>

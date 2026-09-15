@@ -1,0 +1,82 @@
+---
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import Container from "@/components/Container.astro";
+import Section from "@/components/Section.astro";
+import Heading from "@/components/Heading.astro";
+import Text from "@/components/Text.astro";
+import PrimaryButton from "@/components/PrimaryButton.astro";
+import ImageFrame from "@/components/ImageFrame.astro";
+import { getPath, type Locale } from "@/i18n/routes";
+import { workMock } from "@/data/mock/work";
+
+interface Props {
+  locale: Locale;
+}
+
+const { locale } = Astro.props;
+const content = workMock[locale];
+
+const description =
+  locale === "fr"
+    ? "Une sélection curatée du travail de Divine Motion."
+    : "A curated selection of Divine Motion's work.";
+---
+
+<BaseLayout locale={locale} pageId="work" title={content.title} description={description}>
+  <Section spacing="tight">
+    <Container>
+      <Heading level={1} size="display">{content.title}</Heading>
+      <Text as="p" size="lg" class="work__intro">{content.intro}</Text>
+    </Container>
+  </Section>
+
+  <Section spacing="tight">
+    <Container>
+      <!--
+        Editorial gallery, phase 3 foundations: a simple responsive grid of
+        placeholders standing in for the future `work_items` curated
+        selection (docs/CMS_SPEC.md). The predefined composition templates
+        (full-width, portrait, duo, offset landscape, large+small, sequence
+        — docs/DESIGN_SYSTEM.md) are a Phase 3 content-page concern, not a
+        foundations concern, and are intentionally not built here.
+      -->
+      <div class="work__grid">
+        {
+          content.galleryItems.map((item) => (
+            <figure class="work__item">
+              <ImageFrame src="/mock/placeholder.svg" alt={item.imageAlt} ratio="4 / 5" />
+              <figcaption class="visually-hidden">{item.category}</figcaption>
+            </figure>
+          ))
+        }
+      </div>
+    </Container>
+  </Section>
+
+  <Section background="secondary" aria-label="Contact">
+    <Container>
+      <PrimaryButton href={getPath("contact", locale)}>{content.ctaLabel}</PrimaryButton>
+    </Container>
+  </Section>
+</BaseLayout>
+
+<style>
+  /* :global() — passed to the child Text component. */
+  :global(.work__intro) {
+    margin-top: var(--space-4);
+    max-width: 32rem;
+  }
+
+  .work__grid {
+    margin-top: var(--space-8);
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: var(--space-6);
+  }
+
+  @media (max-width: 768px) {
+    .work__grid {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>

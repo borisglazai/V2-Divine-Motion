@@ -1,0 +1,46 @@
+---
+interface Props {
+  href: string;
+  class?: string;
+}
+
+const { href, class: className } = Astro.props;
+---
+
+<a class:list={["editorial-link", className]} href={href}>
+  <span class="editorial-link__label"><slot /></span>
+  <span class="editorial-link__arrow" aria-hidden="true">↗</span>
+</a>
+
+<style>
+  .editorial-link {
+    display: inline-flex;
+    align-items: baseline;
+    gap: var(--space-2);
+    font-family: var(--font-sans);
+    font-size: var(--text-body-lg);
+    color: var(--color-text-primary);
+    text-decoration: none;
+    border-bottom: var(--border-width) solid var(--color-border);
+    padding-bottom: var(--space-1);
+    transition:
+      border-color var(--transition-fast),
+      color var(--transition-fast);
+  }
+
+  .editorial-link:hover,
+  .editorial-link:focus-visible {
+    border-color: var(--color-accent-warm);
+    color: var(--color-accent-warm);
+  }
+
+  .editorial-link__arrow {
+    display: inline-block;
+    transition: transform var(--transition-fast);
+  }
+
+  .editorial-link:hover .editorial-link__arrow,
+  .editorial-link:focus-visible .editorial-link__arrow {
+    transform: translate(2px, -2px);
+  }
+</style>

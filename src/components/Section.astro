@@ -1,0 +1,56 @@
+---
+interface Props {
+  background?: "primary" | "secondary";
+  spacing?: "normal" | "tight" | "none";
+  as?: keyof HTMLElementTagNameMap;
+  class?: string;
+  "aria-label"?: string;
+}
+
+const {
+  background = "primary",
+  spacing = "normal",
+  as: Tag = "section",
+  class: className,
+  "aria-label": ariaLabel,
+} = Astro.props;
+---
+
+<Tag
+  class:list={["section", `section--${background}`, `section--${spacing}`, className]}
+  aria-label={ariaLabel}
+>
+  <slot />
+</Tag>
+
+<style>
+  .section {
+    padding-block: var(--space-24);
+  }
+
+  .section--tight {
+    padding-block: var(--space-12);
+  }
+
+  .section--none {
+    padding-block: 0;
+  }
+
+  .section--primary {
+    background: var(--color-bg-primary);
+  }
+
+  .section--secondary {
+    background: var(--color-bg-secondary);
+  }
+
+  @media (max-width: 768px) {
+    .section {
+      padding-block: var(--space-16);
+    }
+
+    .section--tight {
+      padding-block: var(--space-8);
+    }
+  }
+</style>

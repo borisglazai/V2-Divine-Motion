@@ -1,0 +1,123 @@
+---
+import { getPath, type PageId } from "@/i18n/routes";
+import { t } from "@/i18n/ui";
+import Container from "./Container.astro";
+
+interface Props {
+  locale: "fr" | "en";
+}
+
+const { locale } = Astro.props;
+const copy = t(locale);
+
+const links: { id: PageId; label: string }[] = [
+  { id: "work", label: copy.nav.work },
+  { id: "services", label: copy.nav.services },
+  { id: "about", label: copy.nav.about },
+  { id: "contact", label: copy.nav.contact },
+];
+---
+
+<footer class="footer">
+  <Container class="footer__inner" as="div">
+    <div class="footer__top">
+      <span class="footer__wordmark">{copy.siteName}</span>
+
+      <nav aria-label={copy.nav.work}>
+        <ul class="footer__links">
+          {
+            links.map((link) => (
+              <li>
+                <a href={getPath(link.id, locale)}>{link.label}</a>
+              </li>
+            ))
+          }
+          <li>
+            <a
+              href="https://instagram.com"
+              rel="noopener noreferrer"
+              target="_blank"
+            >
+              {copy.footer.instagram}
+            </a>
+          </li>
+        </ul>
+      </nav>
+    </div>
+
+    <div class="footer__bottom">
+      <p>{copy.footer.rights}</p>
+      <a href={getPath("privacy", locale)}>{copy.footer.privacy}</a>
+    </div>
+  </Container>
+</footer>
+
+<style>
+  .footer {
+    border-top: var(--border-width) solid var(--color-border);
+    background: var(--color-bg-secondary);
+  }
+
+  .footer :global(.footer__inner) {
+    padding-block: var(--space-12);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-8);
+  }
+
+  .footer__top {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-6);
+  }
+
+  .footer__wordmark {
+    font-family: var(--font-serif);
+    font-size: var(--text-h3);
+    color: var(--color-text-primary);
+  }
+
+  .footer__links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-6);
+  }
+
+  .footer__links a {
+    font-family: var(--font-sans);
+    font-size: var(--text-small);
+    color: var(--color-text-secondary);
+    text-decoration: none;
+  }
+
+  .footer__links a:hover,
+  .footer__links a:focus-visible {
+    color: var(--color-text-primary);
+  }
+
+  .footer__bottom {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-4);
+    padding-top: var(--space-8);
+    border-top: var(--border-width) solid var(--color-border);
+  }
+
+  .footer__bottom p {
+    font-family: var(--font-sans);
+    font-size: var(--text-small);
+    color: var(--color-text-secondary);
+    margin: 0;
+  }
+
+  .footer__bottom a {
+    font-family: var(--font-sans);
+    font-size: var(--text-small);
+    color: var(--color-text-secondary);
+    text-decoration: underline;
+  }
+</style>

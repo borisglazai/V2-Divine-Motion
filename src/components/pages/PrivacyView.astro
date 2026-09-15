@@ -1,0 +1,59 @@
+---
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import Container from "@/components/Container.astro";
+import Section from "@/components/Section.astro";
+import Heading from "@/components/Heading.astro";
+import Text from "@/components/Text.astro";
+import type { Locale } from "@/i18n/routes";
+
+interface Props {
+  locale: Locale;
+}
+
+const { locale } = Astro.props;
+
+const title = locale === "fr" ? "Confidentialité" : "Privacy";
+const description =
+  locale === "fr"
+    ? "Politique de confidentialité de Divine Motion."
+    : "Divine Motion's privacy policy.";
+
+const paragraphsFr = [
+  "Cette page présente une version provisoire de la politique de confidentialité de Divine Motion, en attente du texte définitif (docs/SECURITY_PRIVACY.md).",
+  "Divine Motion collecte uniquement les renseignements nécessaires pour répondre à une demande de contact : nom, courriel, téléphone facultatif, type de prestation, date et lieu facultatifs, message.",
+  "Ces renseignements ne sont pas conservés au-delà de ce qui est nécessaire pour traiter votre demande, et ne sont jamais transmis à des tiers à des fins commerciales.",
+];
+
+const paragraphsEn = [
+  "This page shows a placeholder version of Divine Motion's privacy policy, pending the final text (docs/SECURITY_PRIVACY.md).",
+  "Divine Motion only collects the information needed to respond to a contact request: name, email, optional phone, service type, optional date and location, message.",
+  "This information is not kept longer than necessary to process your request, and is never shared with third parties for commercial purposes.",
+];
+
+const paragraphs = locale === "fr" ? paragraphsFr : paragraphsEn;
+---
+
+<BaseLayout locale={locale} pageId="privacy" title={title} description={description}>
+  <Section>
+    <Container class="privacy">
+      <Heading level={1} size="h1">{title}</Heading>
+      <div class="privacy__paragraphs">
+        {paragraphs.map((paragraph) => <Text as="p" size="lg">{paragraph}</Text>)}
+      </div>
+    </Container>
+  </Section>
+</BaseLayout>
+
+<style>
+  /* :global() — passed to the child Container component. */
+  :global(.privacy) {
+    max-width: 42rem;
+  }
+
+  .privacy__paragraphs {
+    margin-top: var(--space-8);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-6);
+  }
+</style>

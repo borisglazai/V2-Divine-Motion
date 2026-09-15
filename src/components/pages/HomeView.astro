@@ -1,0 +1,153 @@
+---
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import Container from "@/components/Container.astro";
+import Section from "@/components/Section.astro";
+import Heading from "@/components/Heading.astro";
+import Text from "@/components/Text.astro";
+import PrimaryButton from "@/components/PrimaryButton.astro";
+import EditorialLink from "@/components/EditorialLink.astro";
+import ImageFrame from "@/components/ImageFrame.astro";
+import { getPath, type Locale } from "@/i18n/routes";
+import { homeMock } from "@/data/mock/home";
+import { t } from "@/i18n/ui";
+
+interface Props {
+  locale: Locale;
+}
+
+const { locale } = Astro.props;
+const copy = t(locale);
+const content = homeMock[locale];
+
+const title = locale === "fr" ? "Accueil" : "Home";
+const description =
+  locale === "fr"
+    ? "Divine Motion — studio de photographie et vidéographie."
+    : "Divine Motion — photography and videography studio.";
+---
+
+<BaseLayout locale={locale} pageId="home" title={title} description={description}>
+  <Section spacing="none" aria-label="Hero">
+    <ImageFrame
+      src="/mock/placeholder.svg"
+      alt={content.heroImageAlt}
+      ratio="16 / 10"
+      loading="eager"
+    />
+    <Container>
+      <div class="hero__copy">
+        <Heading level={1} size="display">{content.heroHeadline}</Heading>
+        <div class="hero__actions">
+          <PrimaryButton href={getPath("work", locale)}>
+            {copy.cta.discoverWork}
+          </PrimaryButton>
+          <EditorialLink href={getPath("contact", locale)}>
+            {copy.cta.talkProject}
+          </EditorialLink>
+        </div>
+      </div>
+    </Container>
+  </Section>
+
+  <Section aria-label={content.workPreviewTitle}>
+    <Container>
+      <Heading level={2} size="h2">{content.workPreviewTitle}</Heading>
+      <div class="work-preview__grid">
+        {
+          content.workPreviewItems.map((item) => (
+            <ImageFrame src="/mock/placeholder.svg" alt={item.imageAlt} ratio="4 / 5" />
+          ))
+        }
+      </div>
+    </Container>
+  </Section>
+
+  <Section background="secondary" aria-label="Brand statement">
+    <Container>
+      <Heading level={2} size="display">{content.brandStatement}</Heading>
+    </Container>
+  </Section>
+
+  <Section aria-label={content.servicesPreviewTitle}>
+    <Container>
+      <Heading level={2} size="h2">{content.servicesPreviewTitle}</Heading>
+      <div class="services-preview__grid">
+        {
+          content.servicesPreviewItems.map((item) => (
+            <div class="services-preview__item">
+              <ImageFrame src="/mock/placeholder.svg" alt={item.imageAlt} ratio="3 / 4" />
+              <Text as="p" size="lg">
+                {item.title}
+              </Text>
+            </div>
+          ))
+        }
+      </div>
+    </Container>
+  </Section>
+
+  <Section spacing="none" aria-label="Editorial">
+    <ImageFrame src="/mock/placeholder.svg" alt={content.editorialImageAlt} ratio="21 / 9" />
+  </Section>
+
+  <Section aria-label={content.aboutPreviewTitle}>
+    <Container>
+      <Heading level={2} size="h2">{content.aboutPreviewTitle}</Heading>
+      <Text as="p" size="lg" class="about-preview__text">
+        {content.aboutPreviewText}
+      </Text>
+      <EditorialLink href={getPath("about", locale)}>{copy.nav.about}</EditorialLink>
+    </Container>
+  </Section>
+
+  <Section background="secondary" aria-label="Contact">
+    <Container>
+      <Heading level={2} size="display">{content.ctaHeadline}</Heading>
+      <PrimaryButton href={getPath("contact", locale)}>
+        {copy.cta.talkProject}
+      </PrimaryButton>
+    </Container>
+  </Section>
+</BaseLayout>
+
+<style>
+  .hero__copy {
+    margin-top: var(--space-12);
+    max-width: 40rem;
+  }
+
+  .hero__actions {
+    margin-top: var(--space-8);
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-6);
+  }
+
+  .work-preview__grid,
+  .services-preview__grid {
+    margin-top: var(--space-8);
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: var(--space-6);
+  }
+
+  .services-preview__item {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+  }
+
+  /* :global() — passed to the child Text component. */
+  :global(.about-preview__text) {
+    margin-block: var(--space-6);
+    max-width: 36rem;
+  }
+
+  @media (max-width: 768px) {
+    .work-preview__grid,
+    .services-preview__grid {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>

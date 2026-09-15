@@ -1,0 +1,56 @@
+---
+import "@/styles/global.css";
+import { getAllPathsFor, type PageId } from "@/i18n/routes";
+import { t } from "@/i18n/ui";
+import Header from "@/components/Header.astro";
+import Footer from "@/components/Footer.astro";
+
+interface Props {
+  locale: "fr" | "en";
+  pageId: PageId;
+  title: string;
+  description: string;
+}
+
+const { locale, pageId, title, description } = Astro.props;
+const copy = t(locale);
+const paths = getAllPathsFor(pageId);
+const siteUrl = Astro.site?.toString().replace(/\/$/, "") ?? "";
+const skipLinkLabel = locale === "fr" ? "Aller au contenu" : "Skip to content";
+---
+
+<!doctype html>
+<html lang={locale}>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title} — {copy.siteName}</title>
+    <meta name="description" content={description} />
+
+    <!-- SEO scaffolding: real per-page OG/Twitter data and structured data
+         (Schema.org LocalBusiness/Organization) land with Phase 4/5 content;
+         canonical + hreflang are wired now since they depend only on the
+         FR/EN route map, not on real content (docs/TECHNICAL_ARCHITECTURE.md). -->
+    <link rel="canonical" href={`${siteUrl}${paths[locale]}`} />
+    <link rel="alternate" hreflang="fr" href={`${siteUrl}${paths.fr}`} />
+    <link rel="alternate" hreflang="en" href={`${siteUrl}${paths.en}`} />
+    <link rel="alternate" hreflang="x-default" href={`${siteUrl}${paths.fr}`} />
+
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:type" content="website" />
+
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  </head>
+  <body>
+    <a class="skip-link" href="#main">{skipLinkLabel}</a>
+
+    <Header locale={locale} pageId={pageId} />
+
+    <main id="main">
+      <slot />
+    </main>
+
+    <Footer locale={locale} />
+  </body>
+</html>

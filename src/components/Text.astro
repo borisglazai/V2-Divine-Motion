@@ -1,0 +1,56 @@
+---
+interface Props {
+  as?: "p" | "span" | "div";
+  size?: "lg" | "body" | "small" | "micro";
+  tone?: "primary" | "secondary" | "discreet";
+  class?: string;
+}
+
+const {
+  as: Tag = "p",
+  size = "body",
+  tone = "primary",
+  class: className,
+} = Astro.props;
+---
+
+<Tag class:list={["text", `text--${size}`, `text--${tone}`, className]}>
+  <slot />
+</Tag>
+
+<style>
+  .text {
+    font-family: var(--font-sans);
+    line-height: var(--leading-normal);
+  }
+
+  .text--lg {
+    font-size: var(--text-body-lg);
+  }
+
+  .text--body {
+    font-size: var(--text-body);
+  }
+
+  .text--small {
+    font-size: var(--text-small);
+  }
+
+  .text--micro {
+    font-size: var(--text-micro);
+  }
+
+  .text--primary {
+    color: var(--color-text-primary);
+  }
+
+  .text--secondary {
+    color: var(--color-text-secondary);
+  }
+
+  /* Reserved for large text / decorative or non-text UI only — see
+     docs/ACCESSIBILITY.md (contrast ~4.04:1, below AA for normal text). */
+  .text--discreet {
+    color: var(--color-text-discreet);
+  }
+</style>

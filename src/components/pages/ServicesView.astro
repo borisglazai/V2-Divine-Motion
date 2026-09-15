@@ -1,0 +1,80 @@
+---
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import Container from "@/components/Container.astro";
+import Section from "@/components/Section.astro";
+import Heading from "@/components/Heading.astro";
+import Text from "@/components/Text.astro";
+import PrimaryButton from "@/components/PrimaryButton.astro";
+import ImageFrame from "@/components/ImageFrame.astro";
+import { getPath, type Locale } from "@/i18n/routes";
+import { servicesMock } from "@/data/mock/services";
+
+interface Props {
+  locale: Locale;
+}
+
+const { locale } = Astro.props;
+const content = servicesMock[locale];
+---
+
+<BaseLayout
+  locale={locale}
+  pageId="services"
+  title={content.title}
+  description={content.intro}
+>
+  <Section spacing="tight">
+    <Container>
+      <Heading level={1} size="display">{content.title}</Heading>
+      <Text as="p" size="lg" class="services__intro">{content.intro}</Text>
+    </Container>
+  </Section>
+
+  {
+    content.items.map((item, index) => (
+      <Section background={index % 2 === 0 ? "primary" : "secondary"}>
+        <Container class="services__row">
+          <ImageFrame src="/mock/placeholder.svg" alt={item.imageAlt} ratio="4 / 3" />
+          <div class="services__copy">
+            <Heading level={2} size="h2">
+              {item.title}
+            </Heading>
+            <Text as="p" size="lg">
+              {item.text}
+            </Text>
+            <PrimaryButton href={getPath("contact", locale)}>
+              {content.ctaLabel}
+            </PrimaryButton>
+          </div>
+        </Container>
+      </Section>
+    ))
+  }
+</BaseLayout>
+
+<style>
+  /* :global() — passed to the child Text component. */
+  :global(.services__intro) {
+    margin-top: var(--space-4);
+    max-width: 32rem;
+  }
+
+  :global(.services__row) {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--space-12);
+    align-items: center;
+  }
+
+  .services__copy {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-6);
+  }
+
+  @media (max-width: 768px) {
+    :global(.services__row) {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>

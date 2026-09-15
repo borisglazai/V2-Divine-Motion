@@ -1,0 +1,163 @@
+---
+import { getPath, type PageId } from "@/i18n/routes";
+import { t } from "@/i18n/ui";
+import LanguageSwitcher from "./LanguageSwitcher.astro";
+
+interface Props {
+  locale: "fr" | "en";
+  pageId: PageId;
+}
+
+const { locale, pageId } = Astro.props;
+const copy = t(locale);
+
+const links: { id: PageId; label: string }[] = [
+  { id: "work", label: copy.nav.work },
+  { id: "services", label: copy.nav.services },
+  { id: "about", label: copy.nav.about },
+  { id: "contact", label: copy.nav.contact },
+];
+---
+
+<div id="mobile-nav" class="mobile-nav" hidden>
+  <div class="mobile-nav__panel">
+    <div class="mobile-nav__top">
+      <span class="mobile-nav__wordmark">{copy.siteName}</span>
+      <button
+        id="mobile-nav-close"
+        class="mobile-nav__close"
+        type="button"
+        aria-label={copy.menuClose}
+      >
+        <span aria-hidden="true">✕</span>
+      </button>
+    </div>
+
+    <nav class="mobile-nav__links" aria-label={copy.nav.work}>
+      <ul>
+        {
+          links.map((link) => (
+            <li>
+              <a
+                href={getPath(link.id, locale)}
+                aria-current={pageId === link.id ? "page" : undefined}
+              >
+                {link.label}
+              </a>
+            </li>
+          ))
+        }
+      </ul>
+    </nav>
+
+    <LanguageSwitcher locale={locale} pageId={pageId} class="mobile-nav__lang" />
+  </div>
+</div>
+
+<style>
+  .mobile-nav {
+    position: fixed;
+    inset: 0;
+    z-index: 90;
+    background: var(--color-bg-primary);
+  }
+
+  .mobile-nav[hidden] {
+    display: none;
+  }
+
+  .mobile-nav__panel {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    padding: var(--space-6);
+  }
+
+  .mobile-nav__top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .mobile-nav__wordmark {
+    font-family: var(--font-serif);
+    font-size: var(--text-h3);
+    color: var(--color-text-primary);
+  }
+
+  .mobile-nav__close {
+    background: none;
+    border: none;
+    color: var(--color-text-primary);
+    font-size: 1.5rem;
+    line-height: 1;
+    padding: var(--space-2);
+    cursor: pointer;
+  }
+
+  .mobile-nav__links {
+    margin-top: var(--space-16);
+  }
+
+  .mobile-nav__links ul {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-8);
+  }
+
+  .mobile-nav__links a {
+    font-family: var(--font-serif);
+    font-size: var(--text-h2);
+    color: var(--color-text-primary);
+    text-decoration: none;
+  }
+
+  .mobile-nav__links a[aria-current="page"] {
+    color: var(--color-accent-warm);
+  }
+
+  /* :global() — this class lands on an element rendered inside the child
+     LanguageSwitcher component, which Astro's per-component CSS scoping
+     does not reach (see the same pattern in Header.astro/Footer.astro). */
+  :global(.mobile-nav__lang) {
+    margin-top: auto;
+    align-self: flex-start;
+  }
+
+  @media (min-width: 1024px) {
+    .mobile-nav {
+      display: none;
+    }
+  }
+</style>
+
+<script>
+  const nav = document.getElementById("mobile-nav");
+  const openButton = document.getElementById("mobile-nav-open");
+  const closeButton = document.getElementById("mobile-nav-close");
+
+  function openNav() {
+    if (!nav) return;
+    nav.hidden = false;
+    openButton?.setAttribute("aria-expanded", "true");
+    document.body.style.overflow = "hidden";
+    closeButton?.focus();
+  }
+
+  function closeNav() {
+    if (!nav) return;
+    nav.hidden = true;
+    openButton?.setAttribute("aria-expanded", "false");
+    document.body.style.overflow = "";
+    openButton?.focus();
+  }
+
+  openButton?.addEventListener("click", openNav);
+  closeButton?.addEventListener("click", closeNav);
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && nav && !nav.hidden) {
+      closeNav();
+    }
+  });
+</script>
