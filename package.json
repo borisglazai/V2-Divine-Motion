@@ -18,16 +18,20 @@
     "db:seed:local": "wrangler d1 execute DB --local --file=seeds/local.sql",
     "db:test:invariants": "node --test tests/db/invariants.test.mjs",
     "db:test:dal": "node --import tsx --test tests/dal/dal.test.ts",
-    "db:test": "npm run db:test:invariants && npm run db:test:dal",
+    "db:test:migration-0003": "node --test tests/db/migration-0003-sequencing.test.mjs",
+    "db:test": "npm run db:test:invariants && npm run db:test:dal && npm run db:test:migration-0003",
     "test:auth": "node --import tsx --test tests/auth/access.test.ts tests/auth/mutation.test.ts",
     "test:admin": "node --test tests/admin/routes.test.mjs",
-    "test:cms:work": "node --import tsx --test tests/admin/work-validation.test.ts tests/admin/work-endpoints.test.ts"
+    "test:cms:work": "node --import tsx --test tests/admin/work-validation.test.ts tests/admin/work-endpoints.test.ts",
+    "test:storage": "node --import tsx --test tests/storage/keys.test.ts tests/storage/image-inspect.test.ts tests/storage/r2-presign.test.ts",
+    "test:media": "node --import tsx --test tests/admin/media-actions.test.ts"
   },
   "dependencies": {
     "@astrojs/cloudflare": "^14.3.1",
     "@fontsource-variable/manrope": "^5.3.0",
     "@fontsource/instrument-serif": "^5.3.0",
     "astro": "^7.3.2",
+    "aws4fetch": "^1.0.20",
     "jose": "^6.2.12"
   },
   "devDependencies": {

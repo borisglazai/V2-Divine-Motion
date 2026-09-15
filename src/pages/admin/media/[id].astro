@@ -1,0 +1,306 @@
+---
+export const prerender = false;
+import AdminLayout from "@/layouts/AdminLayout.astro";
+import FlashMessage from "@/components/admin/FlashMessage.astro";
+import { getDb } from "@/lib/db/client";
+import * as media from "@/lib/db/media";
+import { readFlash } from "@/lib/admin/flash";
+import { readMediaFormRedirect } from "@/lib/admin/media-actions";
+
+const identity = Astro.locals.adminIdentity!;
+const idParam = Number(Astro.params.id);
+if (!Number.isInteger(idParam) || idParam <= 0) {
+  return new Response("Not found.", { status: 404 });
+}
+
+const db = getDb();
+const row = await media.getMedia(db, idParam);
+if (!row) {
+  return new Response("Not found.", { status: 404 });
+}
+
+const usage = await media.getMediaUsage(db, idParam);
+const activeUsage = usage.filter((u) => u.count > 0);
+const totalUsage = activeUsage.reduce((sum, u) => sum + u.count, 0);
+
+const flash = readFlash(Astro.url);
+const { errors, values } = readMediaFormRedirect(Astro.url);
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} o`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} Ko`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} Mo`;
+}
+
+const STATUS_LABEL: Record<typeof row.processing_status, string> = {
+  pending: "En attente",
+  uploaded: "Uploadé",
+  ready: "Prêt",
+  failed: "Échec",
+  abandoned: "Abandonné",
+};
+
+const altFr = values.altFr ?? row.alt_fr ?? "";
+const altEn = values.altEn ?? row.alt_en ?? "";
+const focalX = values.focalX ?? String(row.focal_x);
+const focalY = values.focalY ?? String(row.focal_y);
+const rightsNote = values.publicationRightsNote ?? row.publication_rights_note ?? "";
+---
+
+<AdminLayout activeId="media" title={`Média #${idParam}`} identity={identity}>
+  <FlashMessage flash={flash} />
+
+  <div class="media-detail">
+    <div class="media-detail__preview">
+      {row.processing_status === "ready" ? (
+        <img src={`/admin/media/${idParam}/file`} alt={row.alt_fr ?? ""} class="media-detail__image" />
+      ) : (
+        <p class="media-detail__no-preview">{STATUS_LABEL[row.processing_status]} — pas encore d'aperçu.</p>
+      )}
+      <dl class="media-detail__facts">
+        <div><dt>Nom d'origine</dt><dd>{row.original_filename ?? "—"}</dd></div>
+        <div><dt>Type</dt><dd>{row.mime_type}</dd></div>
+        <div><dt>Dimensions</dt><dd>{row.width && row.height ? `${row.width}×${row.height}` : "—"}</dd></div>
+        <div><dt>Taille</dt><dd>{formatBytes(row.size_bytes)}</dd></div>
+        <div><dt>Statut</dt><dd>{STATUS_LABEL[row.processing_status]}</dd></div>
+        <div><dt>Utilisation</dt><dd>{totalUsage} référence{totalUsage === 1 ? "" : "s"}</dd></div>
+      </dl>
+      {activeUsage.length > 0 && (
+        <ul class="media-detail__usage-list">
+          {activeUsage.map((u) => (
+            <li>{u.table}.{u.column} — {u.count}</li>
+          ))}
+        </ul>
+      )}
+    </div>
+
+    <div class="media-detail__form">
+      {errors.form && (
+        <p class="media-detail__form-error" role="alert">{errors.form}</p>
+      )}
+
+      <form method="POST" action={`/admin/media/${idParam}/save`} class="media-form">
+        <label class="media-form__field">
+          Alt FR
+          <input type="text" name="altFr" value={altFr} />
+        </label>
+        <label class="media-form__field">
+          Alt EN
+          <input type="text" name="altEn" value={altEn} />
+        </label>
+        <div class="media-form__row">
+          <label class="media-form__field">
+            Point focal X (0-100)
+            <input type="number" name="focalX" min="0" max="100" step="1" value={focalX} />
+            {errors.focalX && <span class="media-form__error">{errors.focalX}</span>}
+          </label>
+          <label class="media-form__field">
+            Point focal Y (0-100)
+            <input type="number" name="focalY" min="0" max="100" step="1" value={focalY} />
+            {errors.focalY && <span class="media-form__error">{errors.focalY}</span>}
+          </label>
+        </div>
+
+        <fieldset class="media-form__rights">
+          <legend>Droits de publication</legend>
+          <p class:list={["media-form__rights-status", { "media-form__rights-status--confirmed": row.publication_rights_confirmed === 1 }]}>
+            {row.publication_rights_confirmed ? "Droits de publication confirmés" : "Non confirmé — ne peut pas être publié"}
+          </p>
+          <label class="media-form__checkbox">
+            <input type="checkbox" name="publicationRightsConfirmed" checked={row.publication_rights_confirmed === 1} />
+            Je confirme disposer des droits de publication pour ce média.
+          </label>
+          <label class="media-form__field">
+            Note (optionnel)
+            <textarea name="publicationRightsNote" rows="2">{rightsNote}</textarea>
+          </label>
+        </fieldset>
+
+        <button type="submit" class="media-form__submit">Enregistrer</button>
+      </form>
+
+      <div class="media-detail__danger-zone">
+        {row.deleted_at ? (
+          <form method="POST" action={`/admin/media/${idParam}/restore`}>
+            <button type="submit">Restaurer</button>
+          </form>
+        ) : (
+          <form method="POST" action={`/admin/media/${idParam}/delete`}>
+            <button type="submit" class="media-detail__danger">Mettre à la corbeille</button>
+          </form>
+        )}
+      </div>
+    </div>
+  </div>
+
+  <a class="media-detail__back" href="/admin/media">&larr; Retour à la médiathèque</a>
+</AdminLayout>
+
+<style>
+  .media-detail {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: var(--space-8);
+  }
+
+  .media-detail__preview {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+  }
+
+  .media-detail__image {
+    width: 100%;
+    max-width: 28rem;
+    border-radius: var(--radius-md);
+    border: var(--border-width) solid var(--color-border);
+  }
+
+  .media-detail__no-preview {
+    color: var(--color-text-secondary);
+    font-size: var(--text-small);
+    padding: var(--space-6);
+    border: var(--border-width) dashed var(--color-border);
+    border-radius: var(--radius-md);
+    max-width: 28rem;
+  }
+
+  .media-detail__facts {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+    font-size: var(--text-small);
+  }
+
+  .media-detail__facts div {
+    display: flex;
+    gap: var(--space-2);
+  }
+
+  .media-detail__facts dt {
+    color: var(--color-text-secondary);
+    min-width: 8rem;
+  }
+
+  .media-detail__facts dd {
+    color: var(--color-text-primary);
+  }
+
+  .media-detail__usage-list {
+    font-size: var(--text-small);
+    color: var(--color-text-secondary);
+  }
+
+  .media-detail__form {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-6);
+  }
+
+  .media-detail__form-error {
+    color: #e08a80;
+    padding: var(--space-4);
+    border: var(--border-width) solid #c2554b;
+    border-radius: var(--radius-md);
+  }
+
+  .media-form {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+    max-width: 32rem;
+  }
+
+  .media-form__row {
+    display: flex;
+    gap: var(--space-4);
+  }
+
+  .media-form__field {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+    font-size: var(--text-small);
+    color: var(--color-text-secondary);
+    flex: 1;
+  }
+
+  .media-form__field input,
+  .media-form__field textarea {
+    padding: var(--space-2) var(--space-3);
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-sm);
+    background: var(--color-surface-admin);
+    color: var(--color-text-primary);
+    font: inherit;
+  }
+
+  .media-form__error {
+    color: #e08a80;
+  }
+
+  .media-form__rights {
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-md);
+    padding: var(--space-4);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+  }
+
+  .media-form__rights-status {
+    font-weight: 600;
+    color: #e08a80;
+  }
+
+  .media-form__rights-status--confirmed {
+    color: var(--color-accent-warm);
+  }
+
+  .media-form__checkbox {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    font-size: var(--text-small);
+    color: var(--color-text-primary);
+  }
+
+  .media-form__submit {
+    align-self: flex-start;
+    background: var(--color-accent-warm);
+    color: var(--color-bg-primary);
+    border: none;
+    border-radius: var(--radius-sm);
+    padding: var(--space-3) var(--space-5);
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  .media-detail__danger-zone {
+    padding-top: var(--space-4);
+    border-top: var(--border-width) solid var(--color-border);
+  }
+
+  .media-detail__danger {
+    color: #e08a80;
+    background: none;
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-sm);
+    padding: var(--space-2) var(--space-4);
+    cursor: pointer;
+    min-height: 2.75rem;
+  }
+
+  .media-detail__back {
+    display: inline-block;
+    margin-top: var(--space-8);
+    color: var(--color-text-secondary);
+    font-size: var(--text-small);
+  }
+
+  @media (min-width: 768px) {
+    .media-detail {
+      grid-template-columns: 24rem 1fr;
+    }
+  }
+</style>

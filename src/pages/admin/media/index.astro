@@ -1,0 +1,394 @@
+---
+export const prerender = false;
+import AdminLayout from "@/layouts/AdminLayout.astro";
+import FlashMessage from "@/components/admin/FlashMessage.astro";
+import { getDb } from "@/lib/db/client";
+import * as media from "@/lib/db/media";
+import { cleanupAbandonedMediaAction } from "@/lib/admin/media-actions";
+import { readFlash } from "@/lib/admin/flash";
+import type { MediaRow } from "@/lib/db/types";
+
+const identity = Astro.locals.adminIdentity!;
+const flash = readFlash(Astro.url);
+
+// §27 — minimum filters: active/trash, status, filename search. No tags.
+const view = Astro.url.searchParams.get("view") === "trash" ? "trash" : "active";
+const statusFilter = Astro.url.searchParams.get("status") ?? "";
+const query = (Astro.url.searchParams.get("q") ?? "").trim();
+
+let items: MediaRow[] = [];
+let usageByMediaId = new Map<number, number>();
+let dbUnavailable = false;
+
+try {
+  const db = getDb();
+  // §18 — opportunistic cleanup before listing, no Cron Trigger in this brief.
+  await cleanupAbandonedMediaAction(db);
+
+  const all = await media.listMedia(db, { includeDeleted: view === "trash" });
+  items = all.filter((m) => (view === "trash" ? m.deleted_at !== null : m.deleted_at === null));
+  if (statusFilter) items = items.filter((m) => m.processing_status === statusFilter);
+  if (query) {
+    const needle = query.toLowerCase();
+    items = items.filter((m) => (m.original_filename ?? "").toLowerCase().includes(needle));
+  }
+
+  const usages = await Promise.all(items.map((m) => media.getMediaUsage(db, m.id)));
+  usageByMediaId = new Map(items.map((m, i) => [m.id, usages[i].reduce((sum, u) => sum + u.count, 0)]));
+} catch (err) {
+  console.error("admin media list: D1 read failed", err instanceof Error ? err.message : err);
+  dbUnavailable = true;
+}
+
+const STATUS_LABEL: Record<MediaRow["processing_status"], string> = {
+  pending: "En attente",
+  uploaded: "Uploadé",
+  ready: "Prêt",
+  failed: "Échec",
+  abandoned: "Abandonné",
+};
+
+function withParam(name: string, value: string): string {
+  const url = new URL(Astro.url);
+  if (value) url.searchParams.set(name, value);
+  else url.searchParams.delete(name);
+  return url.pathname + url.search;
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} o`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} Ko`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} Mo`;
+}
+
+function formatDate(ms: number): string {
+  return new Date(ms).toLocaleDateString("fr-CA", { year: "numeric", month: "short", day: "numeric" });
+}
+---
+
+<AdminLayout activeId="media" title="Médias" identity={identity}>
+  <FlashMessage flash={flash} />
+
+  {
+    dbUnavailable ? (
+      <p class="admin-db-error" role="alert">
+        Les données ne sont pas disponibles pour le moment. Réessayez dans un instant.
+      </p>
+    ) : (
+      <>
+        <section class="media-upload" aria-labelledby="media-upload-heading">
+          <h2 id="media-upload-heading" class="visually-hidden">Ajouter des médias</h2>
+          <div class="media-upload__controls">
+            <label class="media-upload__button" for="media-upload-input">+ Ajouter des médias</label>
+            <input id="media-upload-input" type="file" accept="image/jpeg,image/png" multiple hidden />
+            <button id="media-upload-refresh" type="button" class="media-upload__refresh" hidden>
+              Actualiser la médiathèque
+            </button>
+          </div>
+          <ul id="media-upload-list" class="media-upload-list" aria-live="polite"></ul>
+          <template id="media-upload-row-template">
+            <li class="media-upload-row">
+              <span data-filename class="media-upload-row__name" />
+              <span data-status class="media-upload-row__status" />
+              <span data-error class="media-upload-row__error" />
+              <button data-retry type="button" class="media-upload-row__retry" hidden>
+                Réessayer
+              </button>
+            </li>
+          </template>
+        </section>
+
+        <form method="GET" class="media-filters" role="search">
+          <div class="media-filters__tabs" role="group" aria-label="Filtrer par état">
+            <a href={withParam("view", "")} aria-current={view === "active" ? "page" : undefined}>
+              Actifs
+            </a>
+            <a href={withParam("view", "trash")} aria-current={view === "trash" ? "page" : undefined}>
+              Corbeille
+            </a>
+          </div>
+          <input type="hidden" name="view" value={view === "trash" ? "trash" : ""} />
+          <label class="media-filters__field">
+            Statut
+            <select name="status" onchange="this.form.submit()">
+              <option value="" selected={statusFilter === ""}>Tous</option>
+              {Object.entries(STATUS_LABEL).map(([value, label]) => (
+                <option value={value} selected={statusFilter === value}>{label}</option>
+              ))}
+            </select>
+          </label>
+          <label class="media-filters__field">
+            Nom de fichier
+            <input type="search" name="q" value={query} placeholder="rechercher…" />
+          </label>
+          <button type="submit" class="media-filters__submit">Filtrer</button>
+        </form>
+
+        {items.length === 0 ? (
+          <p class="media-empty">Aucun média{view === "trash" ? " dans la corbeille" : ""} pour ces filtres.</p>
+        ) : (
+          <ul class="media-grid">
+            {items.map((item) => {
+              const usage = usageByMediaId.get(item.id) ?? 0;
+              return (
+                <li class="media-card">
+                  <a href={`/admin/media/${item.id}`} class="media-card__thumb-link">
+                    {item.processing_status === "ready" ? (
+                      <img
+                        src={`/admin/media/${item.id}/file`}
+                        alt={item.alt_fr ?? ""}
+                        loading="lazy"
+                        class="media-card__thumb"
+                      />
+                    ) : (
+                      <span class="media-card__thumb media-card__thumb--placeholder">
+                        {STATUS_LABEL[item.processing_status]}
+                      </span>
+                    )}
+                  </a>
+                  <div class="media-card__body">
+                    <p class="media-card__filename" title={item.original_filename ?? ""}>
+                      {item.original_filename ?? `média #${item.id}`}
+                    </p>
+                    <p class="media-card__meta">
+                      {item.width && item.height ? `${item.width}×${item.height} · ` : ""}
+                      {formatBytes(item.size_bytes)} · {STATUS_LABEL[item.processing_status]}
+                    </p>
+                    <p class="media-card__meta">
+                      {item.publication_rights_confirmed ? "Droits confirmés" : "Droits non confirmés"} · {formatDate(item.created_at)}
+                    </p>
+                    <p class="media-card__meta">
+                      Utilisé {usage}×{item.deleted_at ? " · dans la corbeille" : ""}
+                    </p>
+                    <a href={`/admin/media/${item.id}`} class="media-card__edit">Modifier</a>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </>
+    )
+  }
+</AdminLayout>
+
+<script>
+  import { initMediaUploader } from "@/lib/admin/media-upload-client";
+  initMediaUploader();
+</script>
+
+<style>
+  .visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+  }
+
+  .admin-db-error {
+    padding: var(--space-6);
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-md);
+    color: var(--color-text-secondary);
+  }
+
+  .media-upload {
+    margin-bottom: var(--space-8);
+  }
+
+  .media-upload__controls {
+    display: flex;
+    align-items: center;
+    gap: var(--space-4);
+    margin-bottom: var(--space-4);
+  }
+
+  .media-upload__button {
+    background: var(--color-accent-warm);
+    color: var(--color-bg-primary);
+    border-radius: var(--radius-sm);
+    padding: var(--space-3) var(--space-5);
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+
+  .media-upload__refresh {
+    font-size: var(--text-small);
+    color: var(--color-text-primary);
+    background: none;
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-sm);
+    padding: var(--space-2) var(--space-4);
+    cursor: pointer;
+    min-height: 2.5rem;
+  }
+
+  .media-upload-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+  }
+
+  .media-upload-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-3);
+    padding: var(--space-3) var(--space-4);
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-sm);
+    font-size: var(--text-small);
+  }
+
+  .media-upload-row__name {
+    font-weight: 600;
+    color: var(--color-text-primary);
+  }
+
+  .media-upload-row__status {
+    color: var(--color-text-secondary);
+  }
+
+  .media-upload-row__error {
+    color: #e08a80;
+  }
+
+  .media-upload-row[data-upload-status="ready"] .media-upload-row__status {
+    color: var(--color-accent-warm);
+  }
+
+  .media-upload-row__retry {
+    margin-left: auto;
+    font-size: var(--text-small);
+    background: none;
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-sm);
+    padding: var(--space-2) var(--space-3);
+    cursor: pointer;
+    color: var(--color-text-primary);
+  }
+
+  .media-filters {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: end;
+    gap: var(--space-4);
+    margin-bottom: var(--space-6);
+    padding-bottom: var(--space-6);
+    border-bottom: var(--border-width) solid var(--color-border);
+  }
+
+  .media-filters__tabs {
+    display: flex;
+    gap: var(--space-2);
+  }
+
+  .media-filters__tabs a {
+    font-size: var(--text-small);
+    padding: var(--space-2) var(--space-4);
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-sm);
+    color: var(--color-text-secondary);
+    text-decoration: none;
+  }
+
+  .media-filters__tabs a[aria-current="page"] {
+    color: var(--color-text-primary);
+    border-color: var(--color-accent-warm);
+  }
+
+  .media-filters__field {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+    font-size: var(--text-small);
+    color: var(--color-text-secondary);
+  }
+
+  .media-filters__field select,
+  .media-filters__field input {
+    padding: var(--space-2) var(--space-3);
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-sm);
+    background: var(--color-surface-admin);
+    color: var(--color-text-primary);
+    min-height: 2.5rem;
+  }
+
+  .media-filters__submit {
+    font-size: var(--text-small);
+    background: none;
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-sm);
+    padding: var(--space-2) var(--space-4);
+    cursor: pointer;
+    color: var(--color-text-primary);
+    min-height: 2.5rem;
+  }
+
+  .media-empty {
+    color: var(--color-text-secondary);
+  }
+
+  .media-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
+    gap: var(--space-5);
+  }
+
+  .media-card {
+    background: var(--color-surface-admin);
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+  }
+
+  .media-card__thumb-link {
+    display: block;
+  }
+
+  .media-card__thumb {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    aspect-ratio: 4 / 3;
+    object-fit: cover;
+    background: var(--color-bg-primary);
+  }
+
+  .media-card__thumb--placeholder {
+    color: var(--color-text-secondary);
+    font-size: var(--text-small);
+    text-align: center;
+    padding: var(--space-4);
+  }
+
+  .media-card__body {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+    padding: var(--space-4);
+  }
+
+  .media-card__filename {
+    color: var(--color-text-primary);
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .media-card__meta {
+    color: var(--color-text-secondary);
+    font-size: var(--text-small);
+  }
+
+  .media-card__edit {
+    margin-top: var(--space-2);
+    font-size: var(--text-small);
+    color: var(--color-text-primary);
+  }
+</style>

@@ -65,6 +65,26 @@ Suite dédiée (`tests/dal/dal.test.ts`, exécutée via `npm run db:test:dal`, i
   `preview.astro` n'est pas couvert ici (page Astro, pas une fonction important à isoler) — vérifié manuellement contre une session `astro dev` réelle (voir IMPLEMENTATION REPORT 013), sur les mêmes lectures (`getWorkItemDraft`/`getWorkItem`) que cette suite exerce déjà.
 - **`tests/admin/routes.test.mjs`** (`npm run test:admin`, étendu en Brief 013) — deux tests supplémentaires contre le vrai `astro build && astro preview` : une mutation (`POST /admin/work/create`) sans JWT est bloquée avant toute logique métier ; un `Origin` same-origin valide ne suffit jamais à contourner l'authentification.
 
+## Médiathèque + upload direct R2 (Implementation Brief 014)
+
+- **`tests/storage/keys.test.ts`** (`npm run test:storage`) — clé au format `media/{uuid}/original.{ext}` ; extension correcte par MIME type ; MIME non supporté → `null`, jamais un fallback devinée ; deux appels pour le même MIME ne collisionnent jamais.
+- **`tests/storage/image-inspect.test.ts`** (`npm run test:storage`) — détection JPEG/PNG par magic bytes uniquement (jamais le `Content-Type` déclaré) ; dimensions réelles lues (IHDR pour PNG, segment SOFx pour JPEG, y compris avec un segment APP0/JFIF à sauter avant) ; rejet propre (jamais une exception) sur bytes non-image, PNG tronqué, PNG avec chunk mangled, JPEG tronqué, JPEG sans segment SOF.
+- **`tests/storage/r2-presign.test.ts`** (`npm run test:storage`) — l'URL présignée cible le bon endpoint S3/bucket/clé ; paramètres SigV4 réels présents (`X-Amz-Algorithm`, `X-Amz-Credential`, `X-Amz-Signature`, `X-Amz-SignedHeaders`) ; expiration honorée (jamais le défaut 24h d'`aws4fetch`) ; clés différentes → signatures différentes ; segments de chemin encodés. Pur, aucun réseau.
+- **`tests/admin/media-actions.test.ts`** (`npm run test:media`) — les fonctions réelles de `src/lib/admin/media-actions.ts` contre un vrai D1 + R2 local isolé (Miniflare, `tests/dal/harness.ts` étendu avec `getTestBucket()`) :
+  - **JPEG léger** et **PNG léger** — authorize → upload (simulé : écriture directe dans le bucket Miniflare à la clé générée) → upload-complete → `ready`, dimensions réelles, persistance (relecture D1 + R2 après coup) ;
+  - **~24 Mpx** — image 6000×4000 avec un corps de plusieurs Mo, dimensions exactes, complète sans crash ni lenteur excessive ;
+  - **Multi-upload** — 3 fichiers en parallèle dont 1 corrompu : les 2 valides atteignent `ready` indépendamment de l'échec du 3ᵉ ;
+  - **Fichier corrompu/faux** — octets sans magic number réel → `failed`, jamais `ready` ;
+  - **MIME mensonger** — déclaré `image/jpeg`, objet réel PNG → refusé (`MIME_MISMATCH`) ;
+  - **Taille mensongère** — taille déclarée ≠ taille réelle de l'objet R2 → refusé (`SIZE_MISMATCH`) ;
+  - **Upload jamais complété** → `OBJECT_NOT_FOUND` sur `upload-complete`, `failed` ;
+  - **Abandonné** — `abandonStalePendingMedia` marque `abandoned` une ligne `pending` périmée ; `upload-complete` sur une ligne abandonnée est refusé (`INVALID_STATE`) ;
+  - **Suppression bloquée si utilisé** — un média référencé par un `work_item` ne peut pas être mis à la corbeille (réutilise `MEDIA_IN_USE`) ; un média non utilisé le peut ;
+  - **IDOR** — `completeMediaUploadAction`/`deleteMediaAction` sur un id inexistant → erreur propre, jamais un crash.
+- **`tests/admin/routes.test.mjs`** (`npm run test:admin`, étendu en Brief 014) — les 5 routes de mutation `/admin/media/**` et la route d'aperçu `/admin/media/:id/file` sont bloquées sans JWT, avec les bons headers, contre le vrai `astro build && astro preview`.
+- **`tests/db/invariants.test.mjs`** (`npm run db:test:invariants`, étendu en Brief 014) — `media.authorized_at` existe et est nullable ; `media.uploaded_at` reste inchangé (`NOT NULL`) après 0003.
+- **`tests/db/migration-0003-sequencing.test.mjs`** (nouveau, Brief 014) — même discipline empirique que la vérification de séquencement 0002 (013A) : 0001+0002+0003 s'appliquent proprement sur une base neuve ; ré-appliquer `migrations apply` une seconde fois est un no-op sûr ; une base n'ayant que 0001+0002 upgrade correctement vers 0003, avec `authorized_at` bien rétro-rempli depuis `uploaded_at` pour les lignes préexistantes.
+
 ## Retiré du plan de test
 
 Tout scénario de « page projet individuelle publique » (fiche projet dédiée) est retiré — hors scope MVP (voir `docs/decisions/ADR-003-curated-work-vs-project-model.md`).

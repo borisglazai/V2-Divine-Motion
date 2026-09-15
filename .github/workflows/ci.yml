@@ -55,6 +55,10 @@ jobs:
       # invariants (tests/db/, ~27 tests via the Wrangler CLI, ~220s) and
       # the DAL suite (tests/dal/, ~38 tests via Miniflare's Node API
       # directly against the real TypeScript repositories, ~11s).
+      # `npm run db:test` also runs tests/db/migration-0003-sequencing.test.mjs
+      # (Brief 014) — its own isolated persistence directories, proving 0003
+      # applies fresh, re-applies idempotently, and upgrades an
+      # 0001+0002-only database with a correct authorized_at backfill.
       # Independent of the Astro build above; kept as its own steps so a
       # DB regression is reported separately from a frontend one. See
       # docs/TEST_PLAN.md "D1 invariants" / "Data Access Layer".
@@ -72,3 +76,17 @@ jobs:
       # step above, kept sequential only for clearer failure attribution.
       - name: CMS Travail tests
         run: npm run test:cms:work
+
+      # Media Library + R2 upload foundation (Implementation Brief 014).
+      # tests/storage/*.test.ts are pure (no D1/R2/network — key
+      # generation, magic-byte/dimension parsing, SigV4 presign
+      # construction). tests/admin/media-actions.test.ts calls the real
+      # src/lib/admin/media-actions.ts functions against their own
+      # isolated local D1 + R2 via tests/dal/harness.ts (extended in this
+      # brief with getTestBucket()) — same independence from the "Migrate
+      # local D1" step as the CMS Travail suite above.
+      - name: Storage unit tests
+        run: npm run test:storage
+
+      - name: Media Library tests
+        run: npm run test:media

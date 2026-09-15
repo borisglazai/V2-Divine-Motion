@@ -1,0 +1,12 @@
+# Local-only secrets for the R2 S3 API (Implementation Brief 014) — copy this
+# file to `.dev.vars` (gitignored) and fill in real values ONLY if you want
+# to exercise a real presigned-upload round trip against a real (small,
+# dev-only) R2 bucket locally. Without this file, presigned URL generation
+# still runs (aws4fetch needs no network to sign a URL), it just won't work
+# against a real R2 endpoint — every other part of the upload flow (D1
+# metadata, the /upload-complete verification against Miniflare's local R2
+# emulation, the admin UI) works without any of this. See
+# docs/DEPLOYMENT.md "R2 credentials" for staging/production, which use
+# `wrangler secret put` instead — never a file.
+R2_ACCESS_KEY_ID=
+R2_SECRET_ACCESS_KEY=

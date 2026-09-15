@@ -71,6 +71,22 @@ describe("schema applies", () => {
       "trg_work_items_rights_gate_media_change",
     ]);
   });
+
+  // Implementation Brief 014, ADR-017. See
+  // tests/db/migration-0003-sequencing.test.mjs for the fresh-apply /
+  // re-apply / upgrade-from-0002 empirical proofs — this just confirms the
+  // resulting schema shape on the standard fresh-apply-all suite database.
+  test("media.authorized_at exists (0003) and is nullable — no NOT NULL default lie", () => {
+    const col = rows("PRAGMA table_info(media);").find((c) => c.name === "authorized_at");
+    assert.ok(col, "authorized_at column must exist");
+    assert.equal(col.notnull, 0, "authorized_at must be nullable (ADR-017 — only meaningful once actually set)");
+  });
+
+  test("media.uploaded_at is untouched by 0003 — still present, still NOT NULL", () => {
+    const col = rows("PRAGMA table_info(media);").find((c) => c.name === "uploaded_at");
+    assert.ok(col);
+    assert.equal(col.notnull, 1);
+  });
 });
 
 describe("foreign keys", () => {

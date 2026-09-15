@@ -9,3 +9,29 @@ declare namespace App {
     adminIdentity?: import("./lib/auth/access").AdminIdentity;
   }
 }
+
+// R2 S3 API credentials (Implementation Brief 014) — real secrets,
+// deliberately never declared in wrangler.toml (see its "R2 S3 API
+// config" comment), so `wrangler types` never generates them into
+// worker-configuration.d.ts. Declared here by hand instead purely for
+// proper typing (Brief 014 §44: "pas de `any`") — this does NOT create
+// the bindings; they still only exist at runtime via `.dev.vars`/
+// `wrangler secret put`, and are `undefined` if unset
+// (src/lib/storage/env.ts treats a missing value as "not configured",
+// same fail-closed pattern as CF_ACCESS_*). Augmenting both `Env` and
+// `Cloudflare.Env`: `import { env } from "cloudflare:workers"` is typed
+// as `Cloudflare.Env` specifically (confirmed in worker-configuration.d.ts:
+// `export const env: Cloudflare.Env`), but the bare global `Env` is used
+// elsewhere in that same generated file — merging into both keeps every
+// reference consistent regardless of which one a given API uses.
+interface Env {
+  R2_ACCESS_KEY_ID?: string;
+  R2_SECRET_ACCESS_KEY?: string;
+}
+
+declare namespace Cloudflare {
+  interface Env {
+    R2_ACCESS_KEY_ID?: string;
+    R2_SECRET_ACCESS_KEY?: string;
+  }
+}

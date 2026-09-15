@@ -84,7 +84,14 @@ export interface MediaRow {
   publication_rights_confirmed: 0 | 1;
   publication_rights_note: string | null;
   publication_rights_confirmed_at: number | null;
+  /**
+   * Provisional (equal to `authorized_at`) until `processing_status` is
+   * 'uploaded' or 'ready' — only trustworthy as a real confirmation from
+   * that point on. See docs/decisions/ADR-017-r2-direct-upload-lifecycle.md.
+   */
   uploaded_at: number;
+  /** When the row was created / the upload was authorized — unambiguous in every state, unlike `uploaded_at` (Brief 014, ADR-017). */
+  authorized_at: number | null;
   created_at: number;
   updated_at: number;
   deleted_at: number | null;

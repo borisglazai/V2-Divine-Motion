@@ -304,9 +304,14 @@ describe("CMS Travail — media picker only offers ready, non-deleted media", ()
     assert.ok(readyMedia.ok && pendingMedia.ok && failedMedia.ok && deletedMedia.ok);
     if (!readyMedia.ok || !pendingMedia.ok || !failedMedia.ok || !deletedMedia.ok) return;
 
+    // Brief 014: 'ready' is only reachable from 'uploaded' — the real
+    // upload-complete flow always confirms R2 presence (markMediaUploaded)
+    // before validating content (markMediaReady).
+    await media.markMediaUploaded(db, readyMedia.data.id);
     await media.markMediaReady(db, readyMedia.data.id, { width: 100, height: 100 });
     // pendingMedia stays 'pending' (never marked ready)
     await media.markMediaFailed(db, failedMedia.data.id);
+    await media.markMediaUploaded(db, deletedMedia.data.id);
     await media.markMediaReady(db, deletedMedia.data.id, { width: 100, height: 100 });
     await media.softDeleteMedia(db, deletedMedia.data.id);
 

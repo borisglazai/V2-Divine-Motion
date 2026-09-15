@@ -14,6 +14,14 @@ node_modules/
 
 # wrangler
 .wrangler/
+# local-only secrets (R2 S3 API credentials, Brief 014) — never committed,
+# read by `wrangler dev`/`astro dev` the same way `wrangler secret` values
+# are read at runtime. See .dev.vars.example for the expected keys and
+# docs/DEPLOYMENT.md "R2 credentials" for staging/production (wrangler
+# secret put, never a file).
+.dev.vars
+.dev.vars.*
+!.dev.vars.example
 # isolated local D1 persistence directories used only by the test suites
 # (tests/db/invariants.test.mjs, tests/dal/dal.test.ts) — never the
 # developer's seeded local DB in .wrangler/.

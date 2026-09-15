@@ -71,14 +71,63 @@ migrations_dir = "migrations"
 # src/lib/auth/guard.ts, which Vite statically compiles to `false` (and
 # therefore removes) in any `astro build` — see docs/ADMIN_SECURITY.md.
 # ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# R2 S3 API config — Implementation Brief 014. Presigned upload URLs use
+# R2's S3-compatible API (see docs/decisions/ADR-017-r2-direct-upload-lifecycle.md),
+# a SEPARATE credential surface from the R2Bucket binding declared further
+# below: it needs an actual R2 API token (Account ID, Access Key ID,
+# Secret Access Key), not just a Worker binding.
+#
+# R2_ACCOUNT_ID / R2_BUCKET_NAME are NOT secrets (identifiers needed to
+# build the S3 endpoint URL, same category as CF_ACCESS_* above) —
+# committed here as explicit placeholders. R2_ACCESS_KEY_ID /
+# R2_SECRET_ACCESS_KEY ARE real secrets and are deliberately ABSENT from
+# this file entirely, in every environment, including as placeholders:
+# local development reads them from `.dev.vars` (gitignored — see
+# `.dev.vars.example`), staging/production from `wrangler secret put
+# R2_ACCESS_KEY_ID`/`R2_SECRET_ACCESS_KEY` (`--env staging` for staging) —
+# see docs/DEPLOYMENT.md "R2 credentials".
+# ---------------------------------------------------------------------------
 [vars]
 CF_ACCESS_TEAM_DOMAIN = "REPLACE_WITH_REAL_TEAM_DOMAIN.cloudflareaccess.com"
 CF_ACCESS_AUD = "REPLACE_WITH_REAL_ACCESS_APPLICATION_AUD_TAG"
+R2_ACCOUNT_ID = "REPLACE_WITH_REAL_R2_ACCOUNT_ID"
+R2_BUCKET_NAME = "divine-motion-v2-media-local"
 
 [env.staging.vars]
 CF_ACCESS_TEAM_DOMAIN = "REPLACE_WITH_REAL_STAGING_TEAM_DOMAIN.cloudflareaccess.com"
 CF_ACCESS_AUD = "REPLACE_WITH_REAL_STAGING_ACCESS_APPLICATION_AUD_TAG"
+R2_ACCOUNT_ID = "REPLACE_WITH_REAL_R2_ACCOUNT_ID"
+R2_BUCKET_NAME = "REPLACE_WITH_REAL_STAGING_R2_BUCKET_NAME"
 
-# Production Access config is deliberately NOT declared here — same
+# Production Access/R2 config is deliberately NOT declared here — same
 # reasoning as the D1 section above. Set via Cloudflare dashboard
 # environment variables / secrets at deploy time, never in this file.
+
+# ---------------------------------------------------------------------------
+# R2 — Media Library + Upload Foundation (Implementation Brief 014).
+# Binding: MEDIA. The native R2Bucket binding (env.MEDIA — see
+# src/lib/storage/env.ts) is used server-side ONLY, for the
+# /upload-complete verification step (HEAD/GET the object the browser just
+# PUT) and the admin preview/delivery route — never to generate a
+# browser-usable upload URL (the binding has no API for that). Direct
+# browser -> R2 upload instead uses a presigned S3-API PUT URL (see the
+# R2 S3 API config above and ADR-017).
+#
+# Local: same placeholder-id convention as the D1 section above — not a
+# real Cloudflare resource, only a key for Miniflare's local R2 emulation.
+# No `wrangler r2 bucket create` has been run against any real account.
+# ---------------------------------------------------------------------------
+[[r2_buckets]]
+binding = "MEDIA"
+bucket_name = "divine-motion-v2-media-local"
+
+[[env.staging.r2_buckets]]
+binding = "MEDIA"
+# NOT provisioned by this repo — `wrangler r2 bucket create
+# divine-motion-v2-media-staging` must be run once, manually, against the
+# real Cloudflare account (see docs/DEPLOYMENT.md "R2 environments").
+bucket_name = "REPLACE_WITH_REAL_STAGING_R2_BUCKET_NAME"
+
+# Production R2 binding is deliberately NOT declared here — same reasoning
+# as D1/Access above.

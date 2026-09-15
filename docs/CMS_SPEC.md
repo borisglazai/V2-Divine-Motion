@@ -86,3 +86,25 @@ POST /admin/work/reorder               brouillons uniquement — voir DATA_ARCHI
 **Réordonnancement** : draft-safe uniquement (`reorderWorkItemDrafts`, Review 011A) — voir `docs/DATA_ARCHITECTURE.md` "Réordonnancement" pour la limitation de publication groupée, non résolue dans ce brief par choix explicite (Brief 013 §20-21).
 
 **Sécurité des mutations** : voir `docs/ADMIN_SECURITY.md` "Mutation security" et `docs/decisions/ADR-016-admin-mutation-security.md`.
+
+## Médiathèque — deuxième module réel (Implementation Brief 014)
+
+`/admin/media` n'est plus un placeholder : upload direct navigateur → R2 (jamais proxyfié par le Worker), vérification réelle post-upload, médiathèque avec filtres, fiche média (alt FR/EN, point focal, droits de publication, utilisation, corbeille/restauration). Architecture complète : `docs/MEDIA_ARCHITECTURE.md` "Implémentation" et `docs/decisions/ADR-017-r2-direct-upload-lifecycle.md`.
+
+**Routes** (`src/pages/admin/media/`) :
+```text
+GET  /admin/media                          médiathèque (grille, filtres actif/corbeille/statut/recherche)
+GET  /admin/media/:id                      fiche média (métadonnées, alt FR/EN, point focal, droits, usage)
+GET  /admin/media/:id/file                 aperçu admin-only (lit l'objet R2 réel)
+POST /admin/media/upload/authorize         JSON — crée la ligne 'pending' + URL présignée
+POST /admin/media/:id/upload-complete      JSON — vérifie l'objet R2 réel, transition uploaded/ready/failed
+POST /admin/media/:id/save                 alt FR/EN, point focal, droits de publication
+POST /admin/media/:id/delete               corbeille (bloqué si utilisé — MEDIA_IN_USE, réutilise le garde-fou existant)
+POST /admin/media/:id/restore
+```
+
+**Pas de second sélecteur média.** Le sélecteur de la CMS Travail (`MediaPickerField.astro`) relit `listMedia().filter(processing_status === 'ready')` à chaque chargement de page — un média fraîchement uploadé et passé `ready` y apparaît immédiatement, sans aucune modification de ce module.
+
+**Upload multi-fichiers** (`src/lib/admin/media-upload-client.ts`, seul module de ce brief qui tourne dans le navigateur) : chaque fichier suit son propre cycle indépendant `authorize → PUT direct R2 → upload-complete` ; l'échec d'un fichier n'affecte jamais les autres. Statuts affichés par fichier (En attente / Upload… / Vérification… / Prêt / Échec), pourcentage réel pendant l'upload (XMLHttpRequest, pas une barre globale opaque). Réessai manuel uniquement (pas de retry automatique) — relance un cycle complet, sans toucher à la ligne D1 échouée précédente.
+
+**Sécurité des mutations** : même `requireAdminMutation` que la CMS Travail. Chaque route `:id` vérifie l'existence réelle de la ligne avant d'agir (IDOR).

@@ -172,7 +172,21 @@ test("/admin with a malformed Cf-Access-Jwt-Assertion header: still blocked, no 
 });
 
 test("every placeholder admin route is protected the same way, not just /admin itself", async () => {
-  const routes = ["/admin/site", "/admin/work", "/admin/media", "/admin/services", "/admin/testimonials", "/admin/content", "/admin/seo", "/admin/settings"];
+  const routes = [
+    "/admin/site",
+    "/admin/work",
+    "/admin/media",
+    "/admin/media/1",
+    // Brief 014 §37-38: the admin-only R2 preview/delivery route is a GET,
+    // not a mutation — still gated by the same middleware as every other
+    // /admin/** GET, never a separate check.
+    "/admin/media/1/file",
+    "/admin/services",
+    "/admin/testimonials",
+    "/admin/content",
+    "/admin/seo",
+    "/admin/settings",
+  ];
   for (const route of routes) {
     const response = await fetch(`${BASE_URL}${route}`);
     assert.ok([401, 403].includes(response.status), `${route} should be blocked without a JWT, got ${response.status}`);
@@ -213,3 +227,33 @@ test("a same-origin POST to a mutation route still fails without a JWT — a val
   });
   assert.ok([401, 403].includes(response.status));
 });
+
+// Implementation Brief 014 §47 — every new media mutation route, same
+// production-mode preview, same proof: middleware blocks all of them
+// before any requireAdminMutation()/DAL/R2 logic ever runs. This is the
+// HTTP-level half of the security story; requireAdminMutation() itself
+// (method/Origin/identity checks) is already exhaustively unit-tested in
+// tests/auth/mutation.test.ts and every media endpoint calls it the exact
+// same way the work endpoints do — not re-proven per-route here.
+const MEDIA_MUTATION_ROUTES = [
+  { path: "/admin/media/upload/authorize", body: JSON.stringify({ filename: "a.jpg", mimeType: "image/jpeg", sizeBytes: 100 }), contentType: "application/json" },
+  { path: "/admin/media/1/upload-complete", body: undefined, contentType: undefined },
+  { path: "/admin/media/1/save", body: "altFr=a&altEn=a&focalX=50&focalY=50", contentType: "application/x-www-form-urlencoded" },
+  { path: "/admin/media/1/delete", body: undefined, contentType: undefined },
+  { path: "/admin/media/1/restore", body: undefined, contentType: undefined },
+];
+
+for (const route of MEDIA_MUTATION_ROUTES) {
+  test(`media mutation route (POST ${route.path}) with no JWT is blocked before reaching any DAL/R2 logic`, async () => {
+    const headers = { Origin: BASE_URL };
+    if (route.contentType) headers["Content-Type"] = route.contentType;
+    const response = await fetch(`${BASE_URL}${route.path}`, {
+      method: "POST",
+      headers,
+      body: route.body,
+      redirect: "manual",
+    });
+    assert.ok([401, 403].includes(response.status), `expected 401/403, got ${response.status}`);
+    assert.equal(response.headers.get("cache-control"), "no-store");
+  });
+}

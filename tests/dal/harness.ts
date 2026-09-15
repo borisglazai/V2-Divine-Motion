@@ -27,6 +27,10 @@ const PERSIST_DIR = path.join(repoRoot, ".wrangler-test-dal");
 // not by the binding name, so this must match exactly what
 // `wrangler d1 migrations apply DB --local --persist-to <dir>` uses.
 const LOCAL_DB_ID = "00000000-0000-0000-0000-000000000000";
+// Local-only bucket name for Miniflare's R2 emulation (Brief 014 §45 —
+// "ne pas appeler un vrai bucket distant pour les tests unitaires") — never
+// a real Cloudflare resource, just a key into resourcePersistencePath.
+const LOCAL_R2_BUCKET_NAME = "divine-motion-v2-media-test";
 
 let mf: Miniflare | undefined;
 
@@ -52,10 +56,18 @@ export async function resetTestDb(): Promise<D1Database> {
       script: "",
       resourcePersistencePath,
       d1Databases: { DB: LOCAL_DB_ID },
+      r2Buckets: { MEDIA: LOCAL_R2_BUCKET_NAME },
     }),
   );
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return (await mf.getD1Database("DB")) as any as D1Database;
+}
+
+/** The same Miniflare instance's local R2 emulation (Brief 014) — call after `resetTestDb()`, which owns the `mf` lifecycle. */
+export async function getTestBucket(): Promise<R2Bucket> {
+  if (!mf) throw new Error("getTestBucket() called before resetTestDb()");
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (await mf.getR2Bucket("MEDIA")) as any as R2Bucket;
 }
 
 /** Applies seeds/local.sql to the isolated test DB via the real Wrangler CLI (same file the local/staging seed uses — see docs/DEPLOYMENT.md). */

@@ -1,9 +1,14 @@
 /**
- * Media repository — metadata only (Brief 011 §15). No R2, no upload, no
- * transformation. `media` is NOT part of the draft/publish mechanism
- * (ADR-013 covers `work_items`/`services`/`testimonials`/page content,
- * not `media` itself) — it has its own, simpler lifecycle:
- * `processing_status` (upload progress) and `deleted_at` (trash).
+ * Media repository — metadata only, still no transformation. Brief 014
+ * adds the real R2 upload lifecycle (`processing_status` transitions
+ * through 'pending'/'uploaded'/'ready'/'failed'/'abandoned'), but this
+ * file never touches R2 itself — that's `src/lib/storage/` (key
+ * generation, presigned URLs, object verification), which this file's
+ * callers (`src/lib/admin/media-actions.ts`) compose with these DAL
+ * functions. `media` is NOT part of the draft/publish mechanism (ADR-013
+ * covers `work_items`/`services`/`testimonials`/page content, not `media`
+ * itself) — it has its own, simpler lifecycle: `processing_status` and
+ * `deleted_at` (trash).
  */
 import type { MediaRow, Result } from "./types";
 import { fail, ok } from "./types";
@@ -38,6 +43,12 @@ export interface CreateMediaInput {
  * presigned direct upload) — before the file has actually landed in R2,
  * so no upload can ever leave an incoherent/missing row.
  * `processing_status` starts 'pending'.
+ *
+ * `authorized_at` is the unambiguous "row created / upload authorized"
+ * timestamp (Brief 014, ADR-017). `uploaded_at` is set to the SAME value
+ * here — an honest provisional placeholder, not a claim that the upload
+ * happened — and is overwritten with the real confirmation timestamp by
+ * `markMediaUploaded` once the object is actually confirmed present in R2.
  */
 export async function createMediaMetadata(
   db: D1Database,
@@ -50,14 +61,15 @@ export async function createMediaMetadata(
   const now = nowMs();
   const result = await db
     .prepare(
-      `INSERT INTO media (storage_key, original_filename, mime_type, size_bytes, processing_status, uploaded_at, created_at, updated_at, created_by, updated_by)
-       VALUES (?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?) RETURNING id`,
+      `INSERT INTO media (storage_key, original_filename, mime_type, size_bytes, processing_status, uploaded_at, authorized_at, created_at, updated_at, created_by, updated_by)
+       VALUES (?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?) RETURNING id`,
     )
     .bind(
       input.storageKey,
       input.originalFilename ?? null,
       input.mimeType,
       input.sizeBytes,
+      now,
       now,
       now,
       now,
@@ -106,7 +118,29 @@ export async function updateMediaMetadata(
   return ok(undefined);
 }
 
-/** Post-upload validation succeeded (ADR-006: real MIME/dimensions check happens after the direct R2 upload, before the media is usable). */
+/**
+ * `pending -> uploaded`: the server has confirmed (via an R2 HEAD) that
+ * the object is actually present — the one moment `uploaded_at` becomes
+ * a real, trustworthy timestamp rather than the provisional placeholder
+ * `createMediaMetadata` set it to (ADR-017). Called from the
+ * `/upload-complete` flow before deeper validation (magic bytes,
+ * dimensions) runs.
+ */
+export async function markMediaUploaded(db: D1Database, id: number): Promise<Result<void>> {
+  const now = nowMs();
+  const result = await db
+    .prepare(
+      `UPDATE media SET processing_status = 'uploaded', uploaded_at = ?, updated_at = ? WHERE id = ? AND processing_status = 'pending'`,
+    )
+    .bind(now, now, id)
+    .run();
+  if (result.meta.changes === 0) {
+    return fail("INVALID_STATE", `media #${id} is not pending`);
+  }
+  return ok(undefined);
+}
+
+/** Post-upload validation succeeded (ADR-006: real MIME/dimensions check happens after the direct R2 upload, before the media is usable). Only reachable from 'uploaded' — the flow always confirms presence (markMediaUploaded) before validating content. */
 export async function markMediaReady(
   db: D1Database,
   id: number,
@@ -114,12 +148,12 @@ export async function markMediaReady(
 ): Promise<Result<void>> {
   const result = await db
     .prepare(
-      `UPDATE media SET processing_status = 'ready', width = ?, height = ?, updated_at = ? WHERE id = ? AND processing_status IN ('pending', 'uploaded')`,
+      `UPDATE media SET processing_status = 'ready', width = ?, height = ?, updated_at = ? WHERE id = ? AND processing_status = 'uploaded'`,
     )
     .bind(dimensions.width, dimensions.height, nowMs(), id)
     .run();
   if (result.meta.changes === 0) {
-    return fail("INVALID_STATE", `media #${id} is not pending/uploaded`);
+    return fail("INVALID_STATE", `media #${id} is not uploaded`);
   }
   return ok(undefined);
 }
@@ -131,6 +165,24 @@ export async function markMediaFailed(db: D1Database, id: number): Promise<Resul
     .run();
   if (result.meta.changes === 0) return fail("NOT_FOUND", `media #${id} not found`);
   return ok(undefined);
+}
+
+/**
+ * Cleanup (Brief 014 §18 — "une fonction cleanup réutilisable suffit", no
+ * Cron Trigger in this brief): marks `abandoned` every `pending` row whose
+ * `authorized_at` is older than `olderThanMs`. Callable manually, from a
+ * future Cron Trigger, or opportunistically before listing the library.
+ * Returns the number of rows abandoned.
+ */
+export async function abandonStalePendingMedia(db: D1Database, olderThanMs: number): Promise<number> {
+  const cutoff = nowMs() - olderThanMs;
+  const result = await db
+    .prepare(
+      `UPDATE media SET processing_status = 'abandoned', updated_at = ? WHERE processing_status = 'pending' AND authorized_at < ?`,
+    )
+    .bind(nowMs(), cutoff)
+    .run();
+  return result.meta.changes;
 }
 
 /**

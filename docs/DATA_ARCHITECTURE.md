@@ -283,3 +283,21 @@ Stratégie « remplacer entièrement » (`DELETE` puis `INSERT...SELECT`), jamai
 ### Smoke test runtime (`src/pages/dev-d1-smoke-test.json.ts`)
 
 Prouve que le binding `DB` atteint réellement un handler de requête vivant (pas seulement les commandes Wrangler CLI) : `curl http://localhost:.../dev-d1-smoke-test.json` sous `astro dev` renvoie `{"binding":"DB","reachable":true,"query_result":{"ok":1}}` ; la même route sous `astro build && astro preview` (mode production) renvoie `404` — le garde-fou `import.meta.env.DEV` fonctionne. Les fichiers `src/pages/` commençant par `_`/`__` sont exclus du routage par Astro (pas seulement masqués) — cette route utilise donc un préfixe `dev-` plutôt que l'underscore, avec le garde-fou runtime comme véritable protection.
+
+---
+
+## Media upload lifecycle (Implementation Brief 014)
+
+`migrations/0003_media_upload_lifecycle.sql` ajoute `media.authorized_at` (nullable, simple `ADD COLUMN` — 0001/0002 restent immuables). Décision complète, y compris l'option rejetée empiriquement (rendre `uploaded_at` nullable) et pourquoi : `docs/decisions/ADR-017-r2-direct-upload-lifecycle.md`.
+
+**Résumé applicatif.** `media.processing_status` (déjà `pending/uploaded/ready/failed/abandoned` depuis 0001/009A) a désormais un cycle réellement piloté par `src/lib/db/media.ts` :
+
+- `createMediaMetadata` — `pending`, pose `authorized_at` **et** un `uploaded_at` provisoire (même valeur) — jamais NULL, jamais un mensonge, juste "pas encore confirmé".
+- `markMediaUploaded` — `pending → uploaded`, uniquement une fois l'objet R2 confirmé présent (`HEAD`), écrase `uploaded_at` avec l'horodatage réel.
+- `markMediaReady` — `uploaded → ready` uniquement (resserré depuis Brief 011 : n'accepte plus `pending`), pose `width`/`height` réels.
+- `markMediaFailed` — accessible depuis n'importe quel état non terminal.
+- `abandonStalePendingMedia(db, olderThanMs)` — cleanup réutilisable (pas de Cron Trigger dans ce lot), `pending` → `abandoned` sur la base de `authorized_at`.
+
+Ce fichier reste strictement métadonnées : la composition avec R2 (génération de clé, URL présignée, vérification réelle de l'objet) vit dans `src/lib/storage/` (`keys.ts`, `r2-presign.ts`, `image-inspect.ts`, `env.ts`, `media-storage.ts`), jamais dans `src/lib/db/media.ts` lui-même — voir `docs/MEDIA_ARCHITECTURE.md` pour cette couche.
+
+**Tests.** `tests/db/invariants.test.mjs` (colonne `authorized_at` nullable, `uploaded_at` toujours `NOT NULL`) ; `tests/db/migration-0003-sequencing.test.mjs` (apply frais 0001+0002+0003, ré-application idempotente, upgrade depuis une base n'ayant que 0001+0002 avec vérification du backfill) ; `tests/admin/media-actions.test.ts` (cycle complet JPEG/PNG/24 Mpx, multi-upload, corruption, MIME/taille mensongères, abandon, suppression bloquée si utilisé — contre un vrai D1 + R2 Miniflare).
