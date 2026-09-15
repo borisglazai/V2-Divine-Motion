@@ -1,6 +1,6 @@
 # Data Architecture — Divine Motion V2
 
-**Statut :** conception Phase 4 (Implementation Brief 009), révisée suite à la revue **DATA ARCHITECTURE REVIEW 009A**. Design uniquement — aucune migration D1 exécutée, aucune base créée. Le schéma concret et exécutable (draft, non appliqué) est dans `docs/drafts/001_initial.sql`. Ce document explique le *pourquoi* ; le SQL est la référence exacte des colonnes/types/contraintes.
+**Statut :** conçu en Phase 4 (Briefs 009/009A), **implémenté en fondation D1 réelle par le Brief 010** — `migrations/0001_initial.sql` est désormais la migration réelle et appliquée (localement, via Wrangler ; voir `docs/DEPLOYMENT.md`), `docs/drafts/001_initial.sql` reste comme trace du brouillon pré-implémentation mais n'est plus la référence courante. Aucun code applicatif ne lit encore `env.DB` — voir `docs/DEPLOYMENT.md` et `docs/TEST_PLAN.md` "D1 invariants" pour l'état d'implémentation. Ce document explique le *pourquoi* du schéma ; `migrations/0001_initial.sql` est la référence exacte des colonnes/types/contraintes.
 
 **Décisions verrouillées par la Review 009A** (voir ADR-013, ADR-014, ADR-015) : mécanisme brouillon/publié unique pour tout contenu public éditable (`work_items`/`services`/`testimonials` inclus, plus de règle hybride) ; aucune colonne `layout`/`blockType` en D1 pour Travail ou Services ; aucune table de soumission de contact.
 

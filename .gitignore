@@ -14,3 +14,6 @@ node_modules/
 
 # wrangler
 .wrangler/
+# isolated local D1 persistence used only by `npm run db:test` (see
+# tests/db/README.md) — never the developer's seeded local DB.
+.wrangler-test/

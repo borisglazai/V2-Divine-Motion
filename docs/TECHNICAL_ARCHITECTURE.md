@@ -28,7 +28,11 @@ Pipeline minimale sur chaque Pull Request : install → lint → typecheck → b
 
 ## Environnements
 
-Local, Staging (`staging.divinemotion.ca`), Production (`divinemotion.ca`, `admin.divinemotion.ca`). D1 et R2 isolés par environnement (voir `docs/decisions/ADR-009-environment-strategy.md`). Migrations D1 versionnées, jamais de modification manuelle du schéma.
+Local, Staging (`staging.divinemotion.ca`), Production (`divinemotion.ca`, `admin.divinemotion.ca`). D1 et R2 isolés par environnement (voir `docs/decisions/ADR-009-environment-strategy.md`). Migrations D1 versionnées, jamais de modification manuelle du schéma. Configuration réelle : `wrangler.toml` (voir `docs/DEPLOYMENT.md`).
+
+## D1 — fondation (Implementation Brief 010)
+
+`migrations/0001_initial.sql` est la migration réelle et appliquée (localement, via Wrangler) du schéma conçu dans `docs/DATA_ARCHITECTURE.md`. Aucun code applicatif ne lit encore `env.DB` — cette fondation ne connecte ni le frontend public ni un CMS ; voir `docs/DATA_ARCHITECTURE.md` et `docs/DEPLOYMENT.md` pour le détail complet (environnements, seed, tests, sauvegarde).
 
 ## Sécurité
 
@@ -49,3 +53,17 @@ Décisions techniques réelles révélées par la première implémentation (sec
 **Piège de portée CSS Astro — un sélecteur scopé ne matche jamais une classe posée sur un composant enfant.** Le CSS scopé d'Astro applique un attribut de hachage uniquement aux éléments écrits littéralement dans le fichier `.astro` courant. Passer `class="foo"` à un composant enfant (`<Container class="foo">`, `<Text class="foo">`, etc.) puis écrire `.foo { … }` dans le `<style>` du parent ne fonctionne pas : la règle ne s'applique jamais, silencieusement (pas d'erreur de build). Six occurrences de ce bug ont été trouvées et corrigées pendant la QA visuelle de cette implémentation (`about__content`, `contact`, `about-preview__text`, `privacy`, `services__intro`, `work__intro`, plus `mobile-nav__lang`) en enveloppant le sélecteur avec `:global(...)`. **Convention à appliquer systématiquement** : toute classe passée en prop `class` à un composant enfant doit être stylée via `:global(.nom-de-classe)` dans le composant parent.
 
 **Lint.** ESLint 9 (flat config) + `typescript-eslint` + `eslint-plugin-astro` (`flat/recommended`). Le préréglage `flat/jsx-a11y-recommended` du même plugin a été essayé puis retiré : il produisait une erreur de configuration liée à un pair-dépendance non résolu, pour un bénéfice marginal à ce stade (l'accessibilité de cette phase a été vérifiée manuellement — clavier, focus, `lang`, structure sémantique — voir `docs/ACCESSIBILITY.md`). À réévaluer si une revue automatisée d'accessibilité devient nécessaire.
+
+## Notes d'implémentation — D1 Foundation (Implementation Brief 010)
+
+**`PRAGMA foreign_keys` est activé par défaut sur D1**, contrairement à SQLite « nu » où chaque connexion doit l'activer explicitement. Vérifié empiriquement (pas supposé) : `PRAGMA foreign_keys;` retourne `1` immédiatement après connexion à une base D1 locale fraîchement migrée, et une tentative de suppression d'un `media` référencé par `work_items` échoue bien avec `FOREIGN KEY constraint failed`. Confirme le commentaire déjà présent dans `migrations/0001_initial.sql`.
+
+**`wrangler d1 execute --json` écrit le message d'erreur sur STDOUT, pas STDERR.** Sur un `INSERT`/`UPDATE` qui viole une contrainte (`CHECK`, trigger `RAISE(ABORT)`), la commande sort avec un code non nul et imprime `{"error": {"text": "..."}}` sur stdout ; stderr ne contient que la bannière d'avertissement proxy (« Proxy environment variables detected »). Un premier essai de `tests/db/helpers.mjs` lisait uniquement `stderr` sur une commande en échec et obtenait donc un message vide — corrigé pour lire stdout en priorité. À retenir pour tout futur script qui parse la sortie de `wrangler d1 execute`.
+
+**Chaque appel `wrangler d1 execute --command "stmt1; stmt2; ..."` est une transaction atomique.** Si un statement du batch échoue, tous les statements précédents du même appel sont annulés — y compris ceux qui auraient autrement réussi. `tests/db/invariants.test.mjs` sépare donc systématiquement la préparation (qui doit persister) de l'assertion d'échec (dans un appel séparé), plutôt que de les combiner dans un seul `--command`.
+
+**Limite de termes dans un `SELECT` composé (`UNION ALL`) plus basse que la limite SQLite par défaut.** Une requête de vérification ad hoc avec 6 `UNION ALL` a échoué avec `too many terms in compound SELECT` sur D1 local — surprenant, la limite SQLite standard est bien plus haute (500). Contourné en interrogeant chaque table séparément. Sans impact sur le schéma ou les migrations (aucune vue/requête du schéma n'utilise `UNION`), mais à garder en tête pour toute requête d'agrégation multi-tables future (CMS, dashboard admin).
+
+**`wrangler` est un vrai `devDependency` du projet** (`package.json`), pas seulement invoqué via `npx` à la volée — assure une version reproductible (`^4.131.2`) entre postes de développement et CI.
+
+**`npm test` reste scopé au test frontend existant.** La découverte par défaut de `node --test` (sans argument) ramasse tout fichier `*.test.mjs` du dépôt, y compris `tests/db/invariants.test.mjs` — ce qui aurait silencieusement fait dépendre `npm test` de Wrangler/D1 et ajouté ~220s à chaque exécution. `package.json` cible donc explicitement `tests/routes.test.mjs` pour `npm test`, et `tests/db/invariants.test.mjs` a son propre script `db:test`.

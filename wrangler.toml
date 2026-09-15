@@ -1,0 +1,46 @@
+name = "divine-motion-v2"
+compatibility_date = "2026-09-15"
+compatibility_flags = ["nodejs_compat"]
+
+# ---------------------------------------------------------------------------
+# D1 — Data Architecture (Brief 009/009A), D1 Foundation (Brief 010).
+# D1 holds structured content metadata only, never binaries (see
+# docs/DATA_ARCHITECTURE.md, ADR-005/ADR-006 for R2/media).
+#
+# Binding name: DB. Used by `wrangler d1 migrations apply DB --local` and by
+# the local test/seed scripts in this repo. Not yet read by any application
+# code — this Worker does not reach into env.DB anywhere (Brief 010 is
+# foundation only, no CMS/frontend wiring, see docs/DATA_ARCHITECTURE.md
+# "Phase 4/5 — Persistence Foundation").
+# ---------------------------------------------------------------------------
+[[d1_databases]]
+binding = "DB"
+database_name = "divine-motion-v2-local"
+# Placeholder — not a real Cloudflare resource id. `wrangler d1 migrations
+# apply DB --local` only needs *some* value here to key its local Miniflare
+# SQLite file; no `wrangler d1 create` has been run against any real
+# Cloudflare account, and nothing in this repo talks to remote D1. See
+# docs/DEPLOYMENT.md "D1 environments" for the real staging/production
+# provisioning steps (manual, run by whoever holds Cloudflare access).
+database_id = "00000000-0000-0000-0000-000000000000"
+migrations_dir = "migrations"
+
+# ---------------------------------------------------------------------------
+# Staging — NOT provisioned by this repo. `wrangler d1 create
+# divine-motion-v2-staging` must be run once, manually, against the real
+# Cloudflare account, and its real database_id pasted into
+# [env.staging.d1_databases] below before any staging migration can run.
+# This section is intentionally left as a placeholder — see
+# docs/DEPLOYMENT.md for the exact procedure. No migration has been applied
+# to it from this session (Brief 010 scope: local only).
+# ---------------------------------------------------------------------------
+[env.staging]
+[[env.staging.d1_databases]]
+binding = "DB"
+database_name = "divine-motion-v2-staging"
+database_id = "REPLACE_WITH_REAL_STAGING_D1_DATABASE_ID"
+migrations_dir = "migrations"
+
+# Production is deliberately NOT declared here. No production D1 binding,
+# no production database_id, invented or otherwise — see
+# docs/DEPLOYMENT.md and Implementation Brief 010 §26.
