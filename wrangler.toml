@@ -102,7 +102,7 @@ R2_BUCKET_NAME = "divine-motion-v2-media-local"
 
 [env.staging.vars]
 CF_ACCESS_TEAM_DOMAIN = "red-dream-564c.cloudflareaccess.com"
-CF_ACCESS_AUD = "7fdbd558a3d063da41d94ace7b8463d76aeecf5d24f14ca2417d8cefd751d03a"
+CF_ACCESS_AUD = "7ab5d217f898c03df1ff97fa49f66faf482e0477b49df03b2207379ad161bdd3"
 R2_ACCOUNT_ID = "80690274479b4a7f525a8d4c768404bf"
 R2_BUCKET_NAME = "divine-motion-v2-media-staging"
 
