@@ -1,7 +1,10 @@
 name = "divine-motion-v2"
+main = "@astrojs/cloudflare/entrypoints/server"
 compatibility_date = "2026-09-15"
 compatibility_flags = ["nodejs_compat"]
-
+[assets]
+binding = "ASSETS"
+directory = "./dist"
 # ---------------------------------------------------------------------------
 # D1 — Data Architecture (Brief 009/009A), D1 Foundation (Brief 010).
 # D1 holds structured content metadata only, never binaries (see
