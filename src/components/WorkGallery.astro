@@ -1,13 +1,18 @@
 ---
 import ImageFrame from "@/components/ImageFrame.astro";
 import { placeholderPhotos } from "@/lib/placeholder-photos";
-import type { GalleryBlock } from "@/lib/gallery-blocks";
+import type { GalleryBlock, GalleryImage } from "@/lib/gallery-blocks";
 
 interface Props {
   blocks: GalleryBlock[];
 }
 
 const { blocks } = Astro.props;
+
+/** Real CMS-sourced media sets `src` directly; mock pages still resolve through `placeholderPhotos` (Validation Brief 014S bug B). */
+function resolveSrc(image: GalleryImage): string {
+  return image.src ?? placeholderPhotos[image.mediaKey!];
+}
 ---
 
 <div class="work-gallery">
@@ -18,7 +23,7 @@ const { blocks } = Astro.props;
           <div class={`gallery-block gallery-block--duo gallery-block--split-${block.split ?? "even"}`} data-reveal>
             <div class="gallery-block__duo-item">
               <ImageFrame
-                src={placeholderPhotos[block.left.mediaKey]}
+                src={resolveSrc(block.left)}
                 alt={block.left.alt}
                 ratio={block.left.ratio}
                 focalX={block.left.focalX}
@@ -28,7 +33,7 @@ const { blocks } = Astro.props;
             </div>
             <div class="gallery-block__duo-item">
               <ImageFrame
-                src={placeholderPhotos[block.right.mediaKey]}
+                src={resolveSrc(block.right)}
                 alt={block.right.alt}
                 ratio={block.right.ratio}
                 focalX={block.right.focalX}
@@ -45,7 +50,7 @@ const { blocks } = Astro.props;
       return (
         <div class={`gallery-block gallery-block--${modifier}`} data-reveal>
           <ImageFrame
-            src={placeholderPhotos[block.image.mediaKey]}
+            src={resolveSrc(block.image)}
             alt={block.image.alt}
             ratio={block.image.ratio}
             focalX={block.image.focalX}

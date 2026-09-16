@@ -149,6 +149,26 @@ test("public route is unaffected: 200, no admin security headers forced on it", 
   assert.ok(!cacheControl.includes("no-store"), "the public homepage must not get the admin's no-store directive");
 });
 
+// Validation Brief 014S bug B: /travail and /en/work switched from
+// `prerender = true` (checked as static dist/client/ files in
+// tests/routes.test.mjs) to `prerender = false` (real per-request D1
+// read) — their HTTP-level equivalent lives here, reusing this suite's
+// already-running production preview server rather than spawning a
+// second one. At this point in the CI pipeline D1 hasn't been migrated
+// yet (that happens in a later step — see .github/workflows/ci.yml), so
+// this only proves the page itself renders correctly with zero published
+// items (WorkView.astro's own try/catch around the D1 read) — the real
+// content-appears case is proven against real data in
+// tests/public/work-view.test.ts.
+test("public Travail pages (FR/EN) render server-side: 200, no admin headers, even with no D1 data yet", async () => {
+  for (const path of ["/travail", "/en/work"]) {
+    const response = await fetch(`${BASE_URL}${path}`);
+    assert.equal(response.status, 200, `${path} should render 200`);
+    const cacheControl = response.headers.get("cache-control") ?? "";
+    assert.ok(!cacheControl.includes("no-store"), `${path} must not get the admin's no-store directive`);
+  }
+});
+
 test("/admin with no JWT: blocked, no admin data, correct security headers", async () => {
   const response = await fetch(`${BASE_URL}/admin`);
   assert.ok([401, 403].includes(response.status), `expected 401/403, got ${response.status}`);

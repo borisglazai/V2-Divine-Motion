@@ -6,13 +6,20 @@ import Heading from "@/components/Heading.astro";
 import Text from "@/components/Text.astro";
 import { getDb } from "@/lib/db/client";
 import * as work from "@/lib/db/work";
+import { mediaFileUrl } from "@/lib/admin/media-preview";
 
 // Brief 013 §15/§34: admin-only preview of the DRAFT state (or the
 // published state if there's no open draft), so an admin can see a
-// curation change before publishing — never the public route
-// (src/pages/travail.astro stays on mock data, see §35-36). no-store /
-// noindex already apply to this response via src/middleware.ts, same as
-// every other /admin/** route — no separate mechanism needed here.
+// curation change before publishing. no-store / noindex already apply to
+// this response via src/middleware.ts, same as every other /admin/** route
+// — no separate mechanism needed here.
+//
+// Validation Brief 014S bug A: the image below used to hardcode
+// src="/mock/placeholder.svg" — leftover Brief 013 code from before the
+// real R2 upload pipeline existed, never updated. Now uses mediaFileUrl()
+// (src/lib/admin/media-preview.ts), the same helper MediaPickerField.astro
+// already uses successfully — same admin-only, Access-gated R2 read route
+// (src/pages/admin/media/[id]/file.ts), never the public one.
 const identity = Astro.locals.adminIdentity!;
 const idParam = Number(Astro.params.id);
 if (!Number.isInteger(idParam) || idParam <= 0) {
@@ -37,7 +44,7 @@ const isDraftPreview = draft !== null;
 
   <div class="preview-card">
     <ImageFrame
-      src="/mock/placeholder.svg"
+      src={mediaFileUrl(previewRow.media_id)}
       alt={previewRow.alt_fr}
       ratio={previewRow.ratio}
       focalX={previewRow.focal_x}

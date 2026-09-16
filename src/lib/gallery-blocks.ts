@@ -1,7 +1,15 @@
 import type { PlaceholderPhotoKey } from "@/lib/placeholder-photos";
 
 export interface GalleryImage {
-  mediaKey: PlaceholderPhotoKey;
+  /**
+   * Exactly one of `mediaKey`/`src` is set. `mediaKey` resolves through
+   * `placeholderPhotos` (mock pages, unchanged). `src` is a direct URL —
+   * real CMS-sourced media (Validation Brief 014S bug B:
+   * `src/lib/work-gallery-adapter.ts` sets this via
+   * `publicMediaFileUrl()`, never `placeholderPhotos`).
+   */
+  mediaKey?: PlaceholderPhotoKey;
+  src?: string;
   ratio: string;
   alt: string;
   focalX?: number;

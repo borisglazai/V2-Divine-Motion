@@ -69,6 +69,26 @@ export async function getWorkItem(db: D1Database, id: number): Promise<WorkItemR
   return row ?? null;
 }
 
+/**
+ * Validation Brief 014S (bug B) — the authorization check the public media
+ * route (`src/pages/media/[id]/file.ts`) uses before ever reading an R2
+ * object for an anonymous visitor: true only if this media is the current
+ * `media_id` of a work item that is actually live somewhere public right
+ * now (`status = 'published'`, visible, and published in at least one
+ * language). Same trust boundary `listPublishedWorkItems` already
+ * enforces — a media can never be served publicly through any curation
+ * path this function doesn't also recognize as public.
+ */
+export async function isMediaUsedByPublicWorkItem(db: D1Database, mediaId: number): Promise<boolean> {
+  const row = await db
+    .prepare(
+      `SELECT 1 FROM work_items WHERE media_id = ? AND status = 'published' AND is_visible = 1 AND (fr_status = 'published' OR en_status = 'published') LIMIT 1`,
+    )
+    .bind(mediaId)
+    .first();
+  return row !== null;
+}
+
 export interface WorkItemInput {
   mediaId: number;
   category?: "wedding" | "portrait" | "event" | null;

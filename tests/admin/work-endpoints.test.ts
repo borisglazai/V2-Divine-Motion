@@ -481,6 +481,50 @@ describe("Validation Brief 014S bug #2 — media picker thumbnails resolve to a 
   });
 });
 
+describe("Validation Brief 014S bug A — /admin/work/[id]/preview resolves a real media preview URL", () => {
+  // preview.astro has no independent render harness in this repo (see
+  // tests/admin/media-preview.test.ts's header comment) — this exercises
+  // the exact resolution preview.astro now performs
+  // (mediaFileUrl(previewRow.media_id)) for both states that page can show:
+  // an open draft, and (once published) the published row itself.
+  test("draft preview: resolves the draft's own media, never the old mock placeholder", async () => {
+    const created = await media.createMediaMetadata(db, { storageKey: "media/014s-a-draft-preview.jpg", mimeType: "image/jpeg", sizeBytes: 100 }, UPDATED_BY);
+    assert.ok(created.ok);
+    if (!created.ok) return;
+    await media.markMediaUploaded(db, created.data.id);
+    await media.markMediaReady(db, created.data.id, { width: 100, height: 100 });
+
+    const draftResult = await createWorkItemAction(db, workItemForm({ mediaId: String(created.data.id) }), UPDATED_BY);
+    const draftId = Number(draftResult.redirect.match(/\/admin\/work\/(\d+)/)![1]);
+
+    // Exactly what preview.astro computes: draft.status === 'draft' -> draft itself is previewRow.
+    const row = await work.getWorkItem(db, draftId);
+    assert.ok(row);
+    assert.equal(row!.status, "draft");
+    assert.equal(mediaFileUrl(row!.media_id), `/admin/media/${created.data.id}/file`);
+    assert.doesNotMatch(mediaFileUrl(row!.media_id), /placeholder/);
+  });
+
+  test("published preview (no open draft): resolves the published row's media", async () => {
+    const created = await media.createMediaMetadata(db, { storageKey: "media/014s-a-published-preview.jpg", mimeType: "image/jpeg", sizeBytes: 100 }, UPDATED_BY);
+    assert.ok(created.ok);
+    if (!created.ok) return;
+    await media.markMediaUploaded(db, created.data.id);
+    await media.markMediaReady(db, created.data.id, { width: 100, height: 100 });
+
+    const draftResult = await createWorkItemAction(db, workItemForm({ mediaId: String(created.data.id) }), UPDATED_BY);
+    const draftId = Number(draftResult.redirect.match(/\/admin\/work\/(\d+)/)![1]);
+    const publishResult = await publishWorkItemAction(db, draftId, UPDATED_BY);
+    const publishedId = Number(publishResult.redirect.match(/\/admin\/work\/(\d+)/)![1]);
+
+    // Exactly what preview.astro computes: no open draft -> previewRow = the published row itself.
+    const row = await work.getWorkItem(db, publishedId);
+    const openDraft = await work.getWorkItemDraft(db, publishedId);
+    assert.equal(openDraft, null, "no draft should be open right after a fresh publish");
+    assert.equal(mediaFileUrl(row!.media_id), `/admin/media/${created.data.id}/file`);
+  });
+});
+
 describe("CMS Travail — server-side validation is independent of the picker/HTML", () => {
   test("create rejects an unusable form without ever calling the DAL create", async () => {
     const before = (await work.listAllWorkItems(db)).length;

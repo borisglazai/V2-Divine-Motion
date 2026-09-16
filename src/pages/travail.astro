@@ -1,5 +1,9 @@
 ---
-export const prerender = true;
+// Validation Brief 014S bug B: was `prerender = true` (build-time static),
+// which could never reflect a publish/unpublish that happens after
+// deploy, nor a reload showing current state. Real published content now
+// needs a live D1 read per request.
+export const prerender = false;
 import WorkView from "@/components/pages/WorkView.astro";
 ---
 

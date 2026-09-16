@@ -90,3 +90,12 @@ jobs:
 
       - name: Media Library tests
         run: npm run test:media
+
+      # Public Travail page + public media route (Validation Brief 014S).
+      # Pure adapter tests (work-gallery-adapter) plus the real
+      # authorization chain (resolvePublicMediaObject, the public
+      # equivalent of media-actions.ts) against their own isolated local
+      # D1 + R2 via tests/dal/harness.ts — same independence as the suites
+      # above.
+      - name: Public work page tests
+        run: npm run test:public
