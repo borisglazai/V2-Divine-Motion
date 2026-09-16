@@ -37,6 +37,7 @@ import {
   setWorkItemLanguageStatusAction,
   reorderWorkItemsAction,
 } from "../../src/lib/admin/work-actions";
+import { mediaFileUrl } from "../../src/lib/admin/media-preview";
 
 let db: D1Database;
 const UPDATED_BY = "cms-test-admin@divinemotion.ca";
@@ -425,6 +426,58 @@ describe("CMS Travail — media picker only offers ready, non-deleted media", ()
     assert.match(result.redirect, /error_mediaId/);
     const after = (await work.listAllWorkItems(db)).length;
     assert.equal(after, before, "nothing must be created when the media isn't usable");
+  });
+});
+
+describe("Validation Brief 014S bug #2 — media picker thumbnails resolve to a real preview URL", () => {
+  // MediaPickerField.astro has no independent render harness in this repo
+  // (no Vitest/Astro-container test runner — see tests/admin/media-preview.test.ts's
+  // header comment) — these tests instead exercise the exact server-side
+  // data pipeline /admin/work/new.astro and /admin/work/[id].astro run
+  // before handing media to that component, and assert every item in the
+  // result resolves through the same mediaFileUrl() the component itself
+  // now calls (never the old hardcoded mock placeholder).
+  test("/admin/work/new: every ready media handed to the picker resolves a real /admin/media/:id/file preview URL", async () => {
+    const created = await media.createMediaMetadata(db, { storageKey: "media/014s-bug2-new.jpg", mimeType: "image/jpeg", sizeBytes: 100 });
+    assert.ok(created.ok);
+    if (!created.ok) return;
+    await media.markMediaUploaded(db, created.data.id);
+    await media.markMediaReady(db, created.data.id, { width: 100, height: 100 });
+
+    // Exactly what src/pages/admin/work/new.astro computes.
+    const readyMedia = media.sortMediaForPicker((await media.listMedia(db)).filter((m) => m.processing_status === "ready"));
+    assert.ok(readyMedia.length > 0);
+
+    const thisItem = readyMedia.find((m) => m.id === created.data.id);
+    assert.ok(thisItem, "the newly-uploaded media must be in the list new.astro passes to the picker");
+    assert.equal(mediaFileUrl(thisItem!.id), `/admin/media/${created.data.id}/file`);
+
+    // No item in the whole list ever falls back to the old broken source.
+    for (const item of readyMedia) {
+      assert.doesNotMatch(mediaFileUrl(item.id), /placeholder/);
+    }
+  });
+
+  test("/admin/work/[id]: the same pipeline, including the currently-selected media, resolves a real preview URL", async () => {
+    const created = await media.createMediaMetadata(db, { storageKey: "media/014s-bug2-edit.jpg", mimeType: "image/jpeg", sizeBytes: 100 });
+    assert.ok(created.ok);
+    if (!created.ok) return;
+    await media.markMediaUploaded(db, created.data.id);
+    await media.markMediaReady(db, created.data.id, { width: 100, height: 100 });
+
+    const draftResult = await createWorkItemAction(db, workItemForm({ mediaId: String(created.data.id) }), UPDATED_BY);
+    const draftId = Number(draftResult.redirect.match(/\/admin\/work\/(\d+)/)![1]);
+
+    // Exactly what src/pages/admin/work/[id].astro computes, plus resolving
+    // which item is pre-selected (formSource.media_id, same as that page).
+    const row = await work.getWorkItem(db, draftId);
+    assert.ok(row);
+    const readyMedia = media.sortMediaForPicker((await media.listMedia(db)).filter((m) => m.processing_status === "ready"));
+    const selected = readyMedia.find((m) => m.id === row!.media_id);
+
+    assert.ok(selected, "the work item's current media must be among the ready media the picker offers");
+    assert.equal(selected!.id, created.data.id);
+    assert.equal(mediaFileUrl(selected!.id), `/admin/media/${created.data.id}/file`);
   });
 });
 

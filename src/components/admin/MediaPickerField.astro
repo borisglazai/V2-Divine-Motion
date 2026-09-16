@@ -6,13 +6,22 @@
  * src/pages/admin/work/new.astro / [id].astro), so this component never
  * needs to know about upload lifecycle states itself.
  *
- * No R2/Cloudflare Images pipeline exists yet (ADR-005/ADR-006 still
- * open) — every thumbnail uses the same neutral placeholder graphic
- * already established for mock frontend media
- * (public/mock/placeholder.svg), never an invented CDN URL.
+ * Validation Brief 014S bug fix: thumbnails now render the real object via
+ * `/admin/media/:id/file` (the same admin-only, Access-gated R2 read route
+ * `/admin/media` itself uses — see src/pages/admin/media/[id]/file.ts and
+ * src/pages/admin/media/index.astro) instead of a hardcoded mock
+ * placeholder. That placeholder predates Brief 014's real R2 upload
+ * pipeline (ADR-005/ADR-006 were still open when this component was
+ * written) and was never updated once real media existed — every card
+ * rendered the same static SVG path regardless of which media was
+ * selected, which is what showed up as a broken image on staging (the
+ * exact preview mechanism was never swapped, not a broken URL
+ * computation). This never exposes the R2 bucket directly — same
+ * server-side proxy read as the Médiathèque, never a public bucket URL.
  */
 import type { MediaRow } from "@/lib/db/types";
 import ImageFrame from "@/components/ImageFrame.astro";
+import { mediaFileUrl } from "@/lib/admin/media-preview";
 
 interface Props {
   media: MediaRow[];
@@ -36,9 +45,11 @@ const { media, selectedId = null, error } = Astro.props;
         <label class:list={["media-picker__item", { "is-selected": item.id === selectedId }]}>
           <input type="radio" name="mediaId" value={item.id} checked={item.id === selectedId} required />
           <ImageFrame
-            src="/mock/placeholder.svg"
-            alt=""
+            src={mediaFileUrl(item.id)}
+            alt={item.alt_fr ?? item.original_filename ?? ""}
             ratio="1 / 1"
+            focalX={item.focal_x}
+            focalY={item.focal_y}
             class="media-picker__thumb"
           />
           <span class="media-picker__meta">
