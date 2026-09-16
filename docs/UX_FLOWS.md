@@ -6,7 +6,9 @@ VOIR → RESSENTIR → COMPRENDRE → ÊTRE RASSURÉ → CONTACTER, décliné pa
 
 ### Accueil
 
-Header → Hero (grande image + headline court) → Aperçu Travail (quelques images fortes) → Brand Statement (une phrase) → Services (aperçu très court) → Image de respiration → À propos (aperçu minimal) → CTA Contact → Footer. L'accueil reste court, pas d'accumulation de sections marketing.
+Header → Hero (grande image + headline court) → Aperçu Travail (quelques images fortes) → Brand Statement (une phrase) → Services (aperçu très court) → Témoignages (quelques-uns, sobre, jamais une carte SaaS) → Image de respiration → À propos (aperçu minimal) → CTA Contact → Footer. L'accueil reste court, pas d'accumulation de sections marketing.
+
+**Mise à jour — Témoignages CMS.** La section Témoignages, prévue au Master Brief original §13 puis retirée de cette structure par la mise à jour du 15 septembre, est réintroduite ici (décision explicite du Témoignages CMS brief) entre Services et l'image de respiration — même position que l'ordre du Master Brief original. Rendue uniquement si au moins un témoignage publié+visible existe dans la langue courante ; sinon la section est absente (jamais un bloc vide), préservant « l'accueil reste court ».
 
 ### Travail
 

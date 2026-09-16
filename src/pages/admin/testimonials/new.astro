@@ -1,0 +1,54 @@
+---
+export const prerender = false;
+import AdminLayout from "@/layouts/AdminLayout.astro";
+import TestimonialForm from "@/components/admin/TestimonialForm.astro";
+import { getDb } from "@/lib/db/client";
+import * as media from "@/lib/db/media";
+import { readFormRedirect } from "@/lib/admin/formRedirect";
+
+const identity = Astro.locals.adminIdentity!;
+const readyMedia = media.sortMediaForPicker(
+  (await media.listMedia(getDb())).filter((m) => m.processing_status === "ready"),
+);
+
+const { errors, values } = readFormRedirect(Astro.url);
+const prefill = {
+  photoMediaId: values.mediaId ? Number(values.mediaId) : null,
+  authorName: values.authorName,
+  roleContextFr: values.roleContextFr ?? null,
+  roleContextEn: values.roleContextEn ?? null,
+  quoteFr: values.quoteFr,
+  quoteEn: values.quoteEn,
+  position: values.position ? Number(values.position) : undefined,
+  isVisible: values.isVisible === "on",
+};
+---
+
+<AdminLayout activeId="testimonials" title="Nouveau témoignage" identity={identity}>
+  <p class="new-testimonial__note">
+    Créer un témoignage commence toujours par un brouillon — rien n'est jamais publié automatiquement.
+  </p>
+  {errors.form && (
+    <p class="new-testimonial__form-error" role="alert">
+      {errors.form}
+    </p>
+  )}
+  <TestimonialForm action="/admin/testimonials/create" submitLabel="Créer le brouillon" media={readyMedia} errors={errors} values={prefill} />
+</AdminLayout>
+
+<style>
+  .new-testimonial__note {
+    color: var(--color-text-secondary);
+    font-size: var(--text-small);
+    margin-bottom: var(--space-6);
+    max-width: 40rem;
+  }
+
+  .new-testimonial__form-error {
+    color: #e08a80;
+    padding: var(--space-4);
+    border: var(--border-width) solid #c2554b;
+    border-radius: var(--radius-md);
+    margin-bottom: var(--space-6);
+  }
+</style>

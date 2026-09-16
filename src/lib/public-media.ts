@@ -17,6 +17,7 @@
 import { getMedia } from "@/lib/db/media";
 import { isMediaUsedByPublicWorkItem } from "@/lib/db/work";
 import { isMediaUsedByPublicService } from "@/lib/db/services";
+import { isMediaUsedByPublicTestimonial } from "@/lib/db/testimonials";
 
 export function publicMediaFileUrl(mediaId: number): string {
   return `/media/${mediaId}/file`;
@@ -36,10 +37,12 @@ export interface ResolvedPublicMedia {
  *      rights can later be unconfirmed via the Médiathèque without that
  *      trigger re-firing, so this is real defense-in-depth, not a
  *      formality).
- *   2. The media is the current `media_id` of a work item OR a service
- *      that is actually live right now — the exact same conditions
- *      `listPublishedWorkItems`/`listPublishedServices` use to decide
- *      what the public Travail/Services pages show at all.
+ *   2. The media is the current `media_id`/`photo_media_id` of a work
+ *      item, a service, OR a testimonial that is actually live right
+ *      now — the exact same conditions `listPublishedWorkItems`/
+ *      `listPublishedServices`/`listPublishedTestimonials` use to decide
+ *      what the public Travail/Services/Home (testimonials section)
+ *      pages show at all.
  *
  * Returns `null` on any failure — the caller always maps that to a plain
  * 404, never a distinct "exists but not authorized" response that would
@@ -55,7 +58,10 @@ export async function resolvePublicMediaObject(
     return null;
   }
 
-  const isPublic = (await isMediaUsedByPublicWorkItem(db, mediaId)) || (await isMediaUsedByPublicService(db, mediaId));
+  const isPublic =
+    (await isMediaUsedByPublicWorkItem(db, mediaId)) ||
+    (await isMediaUsedByPublicService(db, mediaId)) ||
+    (await isMediaUsedByPublicTestimonial(db, mediaId));
   if (!isPublic) return null;
 
   const object = await bucket.get(row.storage_key);

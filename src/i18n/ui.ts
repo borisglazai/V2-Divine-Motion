@@ -21,6 +21,9 @@ export const ui = {
       discoverAbout: "Découvrir Divine Motion",
       contactUs: "Nous contacter",
     },
+    testimonials: {
+      label: "Témoignages",
+    },
     footer: {
       privacy: "Confidentialité",
       rights: `© ${__BUILD_YEAR__} Divine Motion. Tous droits réservés.`,
@@ -59,6 +62,9 @@ export const ui = {
       talkProject: "Talk about your project",
       discoverAbout: "Discover Divine Motion",
       contactUs: "Contact us",
+    },
+    testimonials: {
+      label: "Testimonials",
     },
     footer: {
       privacy: "Privacy",

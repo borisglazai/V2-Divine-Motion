@@ -27,9 +27,11 @@ interface Props {
   media: MediaRow[];
   selectedId?: number | null;
   error?: string;
+  /** Testimonials CMS: a photo/avatar is optional there (photo_media_id is nullable), unlike Travail/Services where a main media is mandatory — default true keeps both of those unchanged. */
+  required?: boolean;
 }
 
-const { media, selectedId = null, error } = Astro.props;
+const { media, selectedId = null, error, required = true } = Astro.props;
 ---
 
 <fieldset class="media-picker">
@@ -40,10 +42,16 @@ const { media, selectedId = null, error } = Astro.props;
     </p>
   )}
   <div class="media-picker__list" role="radiogroup" aria-describedby={error ? "mediaId-error" : undefined}>
+    {!required && (
+      <label class:list={["media-picker__item", "media-picker__item--none", { "is-selected": selectedId === null }]}>
+        <input type="radio" name="mediaId" value="" checked={selectedId === null} />
+        <span class="media-picker__none-label">Aucun média</span>
+      </label>
+    )}
     {
       media.map((item) => (
         <label class:list={["media-picker__item", { "is-selected": item.id === selectedId }]}>
-          <input type="radio" name="mediaId" value={item.id} checked={item.id === selectedId} required />
+          <input type="radio" name="mediaId" value={item.id} checked={item.id === selectedId} required={required} />
           <ImageFrame
             src={mediaFileUrl(item.id)}
             alt={item.alt_fr ?? item.original_filename ?? ""}
@@ -151,6 +159,17 @@ const { media, selectedId = null, error } = Astro.props;
   }
 
   .media-picker__empty {
+    color: var(--color-text-secondary);
+    font-size: var(--text-small);
+  }
+
+  .media-picker__item--none {
+    align-items: center;
+    justify-content: center;
+    min-height: 6rem;
+  }
+
+  .media-picker__none-label {
     color: var(--color-text-secondary);
     font-size: var(--text-small);
   }

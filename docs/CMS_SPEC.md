@@ -137,3 +137,17 @@ POST /admin/services/reorder                brouillons uniquement — même limi
 **Image publique.** Réutilise intégralement l'architecture créée en Validation Brief 014S : `/media/:id/file` + `resolvePublicMediaObject`, désormais étendu pour reconnaître aussi bien un usage Travail qu'un usage Services (`isMediaUsedByPublicService`, `src/lib/db/services.ts`) — aucun second système média, aucun bucket R2 rendu public.
 
 **UX — pas de jargon anglais dans l'interface.** Les statuts s'affichent « Publié »/« Brouillon » (jamais `published`/`draft` bruts) et « Visible »/« Masqué » pour `is_active`, contrairement à l'écran Travail existant qui affiche encore les valeurs brutes anglaises (non touché — CMS Travail validé, hors périmètre de ce brief).
+
+## Témoignages CMS — troisième module réel
+
+`/admin/testimonials` n'est plus un placeholder. Même patron que Services : `testimonials-actions.ts`, `testimonials-validation.ts`, `TestimonialForm.astro`, routes `/admin/testimonials/*`. Contrairement à Travail/Services, le schéma `testimonials` (Brief 009/011) couvrait déjà 100 % des champs demandés et portait déjà les 3 triggers de droits de publication (`trg_testimonials_rights_gate_fr/en/media_change`, depuis 0001/0002) — **aucune migration** pour ce brief.
+
+**Routes** (`src/pages/admin/testimonials/`) : même forme que Services (`new`, `:id`, `create`, `:id/save`, `:id/publish`, `:id/delete-draft`, `:id/language-status`, `reorder`).
+
+**Photo optionnelle.** `testimonials.photo_media_id` est nullable — premier module où le média principal n'est pas obligatoire. `MediaPickerField.astro` gagne un prop `required?: boolean` (défaut `true`, Travail/Services inchangés) qui ajoute une option « Aucun média » au radiogroup quand `false`.
+
+**Complète le garde-fou de droits.** `publishTestimonial()` n'avait pas le préflight applicatif pour le cas « remplacer le média d'une ligne déjà publiée par un média sans droits confirmés » (le trigger D1 le couvrait déjà, sans message clair avant l'abort SQL) — ajouté par cohérence avec `publishWorkItem`/`publishService` (voir ADR-011).
+
+**Frontend public — nouvelle surface, pas une reconnexion de mock.** Contrairement à Travail/Services, aucune page ni mock public n'existait pour les témoignages avant ce brief (`docs/INFORMATION_ARCHITECTURE.md` ne les listait que dans l'arborescence admin ; `docs/UX_FLOWS.md` du 15 septembre avait retiré la section Témoignages de l'Accueil). Décision explicite (Témoignages CMS brief) : réintroduire une section Témoignages sur l'Accueil, entre Services et l'image de respiration — voir `docs/UX_FLOWS.md`. `index.astro`/`en/index.astro` passent en `prerender = false` (même correctif que Travail/Services) ; `HomeView.astro` lit `listPublishedTestimonials()` en temps réel et n'affiche la section que si au moins un témoignage est publié+visible dans la langue courante. Rendu sobre : citation + nom (+ rôle/contexte facultatif) + avatar circulaire optionnel — jamais une carte SaaS (étoiles, bulle de citation, carrousel).
+
+**Image publique.** Réutilise `/media/:id/file` + `resolvePublicMediaObject`, désormais étendu pour reconnaître aussi l'usage Témoignages (`isMediaUsedByPublicTestimonial`, `src/lib/db/testimonials.ts`) en plus de Travail/Services.

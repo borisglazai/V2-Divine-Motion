@@ -86,6 +86,12 @@ jobs:
       - name: CMS Services tests
         run: npm run test:cms:services
 
+      # Témoignages CMS — third real CMS module. Same shape as Services'
+      # step above (testimonials.ts already had its full rights-gate
+      # trigger set from 0001/0002, so no migration for this brief).
+      - name: CMS Testimonials tests
+        run: npm run test:cms:testimonials
+
       # Media Library + R2 upload foundation (Implementation Brief 014).
       # tests/storage/*.test.ts are pure (no D1/R2/network — key
       # generation, magic-byte/dimension parsing, SigV4 presign
@@ -100,12 +106,12 @@ jobs:
       - name: Media Library tests
         run: npm run test:media
 
-      # Public Travail/Services pages + public media route (Validation
-      # Brief 014S, extended by the Services CMS brief). Pure adapter
-      # tests (work-gallery-adapter, service-layout) plus the real
-      # authorization chain (resolvePublicMediaObject, now recognizing
-      # both work_items and services usage) against their own isolated
-      # local D1 + R2 via tests/dal/harness.ts — same independence as the
-      # suites above.
-      - name: Public work/services page tests
+      # Public Travail/Services/Home pages + public media route
+      # (Validation Brief 014S, extended by the Services and Témoignages
+      # CMS briefs). Pure adapter tests (work-gallery-adapter,
+      # service-layout) plus the real authorization chain
+      # (resolvePublicMediaObject, now recognizing work_items, services,
+      # AND testimonials usage) against their own isolated local D1 + R2
+      # via tests/dal/harness.ts — same independence as the suites above.
+      - name: Public work/services/home page tests
         run: npm run test:public

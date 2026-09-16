@@ -1,5 +1,8 @@
 ---
-export const prerender = true;
+// Témoignages CMS brief: was `prerender = true` (build-time static),
+// which could never reflect a publish/unpublish after deploy — same fix
+// as travail.astro/services.astro (Validation Brief 014S / Services CMS).
+export const prerender = false;
 import HomeView from "@/components/pages/HomeView.astro";
 ---
 

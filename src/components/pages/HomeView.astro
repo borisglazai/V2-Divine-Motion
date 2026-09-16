@@ -11,6 +11,10 @@ import { getPath, type Locale } from "@/i18n/routes";
 import { homeMock } from "@/data/mock/home";
 import { placeholderPhotos } from "@/lib/placeholder-photos";
 import { t } from "@/i18n/ui";
+import { getDb } from "@/lib/db/client";
+import { listPublishedTestimonials } from "@/lib/db/testimonials";
+import { publicMediaFileUrl } from "@/lib/public-media";
+import type { TestimonialRow } from "@/lib/db/types";
 
 interface Props {
   locale: Locale;
@@ -22,6 +26,20 @@ const content = homeMock[locale];
 
 const title = locale === "fr" ? "Accueil" : "Home";
 const description = content.hero.subline;
+
+// Témoignages CMS: the only Home section backed by real D1 (every other
+// section here is still homeMock — out of scope for this brief, same
+// deliberate scope line already drawn for Travail/Services). Fails
+// closed to an empty list, never a page-level 500 (see
+// WorkView.astro/ServicesView.astro for the same pattern) — the section
+// itself is skipped entirely below when there's nothing to show, rather
+// than rendering an empty shell.
+let testimonials: TestimonialRow[] = [];
+try {
+  testimonials = await listPublishedTestimonials(getDb(), locale);
+} catch (err) {
+  console.error("public / (home): testimonials D1 read failed", err instanceof Error ? err.message : err);
+}
 ---
 
 <BaseLayout
@@ -119,6 +137,55 @@ const description = content.hero.subline;
       </div>
     </Container>
   </Section>
+
+  <!-- TESTIMONIALS — Témoignages CMS. Reintroduces the Master Brief §13
+       section (dropped from the 15 September redesign's home structure),
+       decided explicitly for this brief. Sober, editorial: a quote and a
+       name, never a SaaS review card (star ratings, quote-bubble icons,
+       carousels). Skipped entirely when there's nothing published — an
+       empty section shell would break the page's own "reste court" rule. -->
+  {
+    testimonials.length > 0 && (
+      <Section aria-label={copy.testimonials.label}>
+        <Container>
+          <div data-reveal>
+            <Heading level={2} size="eyebrow">
+              {copy.testimonials.label}
+            </Heading>
+            <div class="testimonials-grid">
+              {testimonials.map((testimonial) => (
+                <figure class="testimonial">
+                  {testimonial.photo_media_id && (
+                    <ImageFrame
+                      src={publicMediaFileUrl(testimonial.photo_media_id)}
+                      alt=""
+                      ratio="1 / 1"
+                      class="testimonial__avatar"
+                    />
+                  )}
+                  <blockquote class="testimonial__quote">
+                    <Text as="p" size="lg">
+                      {locale === "fr" ? testimonial.quote_fr : testimonial.quote_en}
+                    </Text>
+                  </blockquote>
+                  <figcaption class="testimonial__meta">
+                    <Text as="span" size="body" class="testimonial__name">
+                      {testimonial.author_name}
+                    </Text>
+                    {(locale === "fr" ? testimonial.role_context_fr : testimonial.role_context_en) && (
+                      <Text as="span" size="small" tone="secondary">
+                        {locale === "fr" ? testimonial.role_context_fr : testimonial.role_context_en}
+                      </Text>
+                    )}
+                  </figcaption>
+                </figure>
+              ))}
+            </div>
+          </div>
+        </Container>
+      </Section>
+    )
+  }
 
   <!-- EDITORIAL IMAGE / RESPIRATION — no text by design (section 10). -->
   <Section spacing="none">
@@ -334,6 +401,63 @@ const description = content.hero.subline;
 
     .services-editorial__item:nth-child(2) {
       margin-top: var(--space-16);
+    }
+  }
+
+  /* TESTIMONIALS — editorial, not review cards: no borders/shadows/star
+     ratings, just serif-body quote + name, same visual register as the
+     rest of the page. */
+  .testimonials-grid {
+    margin-top: var(--space-8);
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: var(--space-12);
+  }
+
+  .testimonial {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+    margin: 0;
+  }
+
+  .testimonial__avatar {
+    width: 3.5rem;
+    border-radius: 50%;
+    overflow: hidden;
+  }
+
+  .testimonial__quote {
+    margin: 0;
+  }
+
+  .testimonial__quote :global(p) {
+    color: var(--color-text-primary);
+  }
+
+  .testimonial__quote :global(p)::before {
+    content: "“";
+  }
+
+  .testimonial__quote :global(p)::after {
+    content: "”";
+  }
+
+  .testimonial__meta {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+  }
+
+  :global(.testimonial__name) {
+    font-family: var(--font-serif);
+    color: var(--color-text-primary);
+  }
+
+  @media (min-width: 768px) {
+    .testimonials-grid {
+      grid-template-columns: repeat(2, 1fr);
+      gap: var(--space-16) var(--space-8);
     }
   }
 

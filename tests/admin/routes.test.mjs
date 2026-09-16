@@ -160,8 +160,8 @@ test("public route is unaffected: 200, no admin security headers forced on it", 
 // items (WorkView.astro's own try/catch around the D1 read) — the real
 // content-appears case is proven against real data in
 // tests/public/work-view.test.ts.
-test("public Travail/Services pages (FR/EN) render server-side: 200, no admin headers, even with no D1 data yet", async () => {
-  for (const path of ["/travail", "/en/work", "/services", "/en/services"]) {
+test("public Travail/Services/Home pages (FR/EN) render server-side: 200, no admin headers, even with no D1 data yet", async () => {
+  for (const path of ["/travail", "/en/work", "/services", "/en/services", "/", "/en"]) {
     const response = await fetch(`${BASE_URL}${path}`);
     assert.equal(response.status, 200, `${path} should render 200`);
     const cacheControl = response.headers.get("cache-control") ?? "";

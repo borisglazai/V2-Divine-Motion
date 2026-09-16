@@ -1,0 +1,176 @@
+---
+import type { MediaRow } from "@/lib/db/types";
+import MediaPickerField from "./MediaPickerField.astro";
+import type { TestimonialFormErrors } from "@/lib/admin/testimonials-validation";
+
+interface Values {
+  photoMediaId?: number | null;
+  authorName?: string;
+  roleContextFr?: string | null;
+  roleContextEn?: string | null;
+  quoteFr?: string;
+  quoteEn?: string;
+  position?: number;
+  isVisible?: boolean;
+}
+
+interface Props {
+  action: string;
+  submitLabel: string;
+  media: MediaRow[];
+  values?: Values;
+  errors?: TestimonialFormErrors;
+}
+
+const { action, submitLabel, media, values = {}, errors = {} } = Astro.props;
+const v = {
+  authorName: values.authorName ?? "",
+  roleContextFr: values.roleContextFr ?? "",
+  roleContextEn: values.roleContextEn ?? "",
+  quoteFr: values.quoteFr ?? "",
+  quoteEn: values.quoteEn ?? "",
+  position: values.position ?? 1,
+  isVisible: values.isVisible ?? true,
+};
+---
+
+<form method="POST" action={action} class="testimonial-form" novalidate>
+  <MediaPickerField media={media} selectedId={values.photoMediaId ?? null} error={errors.mediaId} required={false} />
+
+  <div class="field">
+    <label for="authorName">Nom de la personne</label>
+    <input id="authorName" name="authorName" type="text" value={v.authorName} aria-invalid={errors.authorName ? "true" : undefined} aria-describedby={errors.authorName ? "authorName-error" : undefined} required />
+    {errors.authorName && <p class="field__error" id="authorName-error" role="alert">{errors.authorName}</p>}
+  </div>
+
+  <div class="field">
+    <label for="position">Ordre d'affichage</label>
+    <input id="position" name="position" type="number" min="1" step="1" value={v.position} aria-invalid={errors.position ? "true" : undefined} aria-describedby={errors.position ? "position-error" : undefined} required />
+    {errors.position && <p class="field__error" id="position-error" role="alert">{errors.position}</p>}
+  </div>
+
+  <fieldset class="testimonial-form__locale">
+    <legend>Français</legend>
+
+    <div class="field">
+      <label for="roleContextFr">Rôle / contexte (facultatif)</label>
+      <input id="roleContextFr" name="roleContextFr" type="text" placeholder="Mariée, mariage à Québec" value={v.roleContextFr} />
+    </div>
+
+    <div class="field">
+      <label for="quoteFr">Témoignage</label>
+      <textarea id="quoteFr" name="quoteFr" rows="4" aria-invalid={errors.quoteFr ? "true" : undefined} aria-describedby={errors.quoteFr ? "quoteFr-error" : undefined} required>{v.quoteFr}</textarea>
+      {errors.quoteFr && <p class="field__error" id="quoteFr-error" role="alert">{errors.quoteFr}</p>}
+    </div>
+  </fieldset>
+
+  <fieldset class="testimonial-form__locale">
+    <legend>English</legend>
+
+    <div class="field">
+      <label for="roleContextEn">Role / context (optional)</label>
+      <input id="roleContextEn" name="roleContextEn" type="text" placeholder="Bride, wedding in Quebec City" value={v.roleContextEn} />
+    </div>
+
+    <div class="field">
+      <label for="quoteEn">Testimonial</label>
+      <textarea id="quoteEn" name="quoteEn" rows="4" aria-invalid={errors.quoteEn ? "true" : undefined} aria-describedby={errors.quoteEn ? "quoteEn-error" : undefined} required>{v.quoteEn}</textarea>
+      {errors.quoteEn && <p class="field__error" id="quoteEn-error" role="alert">{errors.quoteEn}</p>}
+    </div>
+  </fieldset>
+
+  <label class="checkbox-field">
+    <input type="checkbox" name="isVisible" checked={v.isVisible} />
+    Visible sur le site
+  </label>
+
+  <button type="submit" class="testimonial-form__submit">{submitLabel}</button>
+</form>
+
+<style>
+  .testimonial-form {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-6);
+    max-width: 40rem;
+  }
+
+  .testimonial-form__locale {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-md);
+    padding: var(--space-4);
+  }
+
+  .testimonial-form__locale legend {
+    font-size: var(--text-small);
+    color: var(--color-text-secondary);
+    padding-inline: var(--space-2);
+  }
+
+  .field {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+  }
+
+  .field label {
+    font-size: var(--text-small);
+    color: var(--color-text-secondary);
+  }
+
+  .field input,
+  .field textarea {
+    background: var(--color-surface-admin);
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-sm);
+    color: var(--color-text-primary);
+    padding: var(--space-2) var(--space-3);
+    min-height: 2.75rem;
+    font-size: var(--text-body);
+    font-family: inherit;
+  }
+
+  .field textarea {
+    resize: vertical;
+  }
+
+  .field input[aria-invalid="true"],
+  .field textarea[aria-invalid="true"] {
+    border-color: #c2554b;
+  }
+
+  .field__error {
+    color: #e08a80;
+    font-size: var(--text-small);
+  }
+
+  .checkbox-field {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    font-size: var(--text-body);
+    color: var(--color-text-primary);
+    min-height: 2.75rem;
+  }
+
+  .checkbox-field input {
+    width: 1.25rem;
+    height: 1.25rem;
+  }
+
+  .testimonial-form__submit {
+    align-self: flex-start;
+    background: var(--color-accent-warm);
+    color: var(--color-bg-primary);
+    border: none;
+    border-radius: var(--radius-sm);
+    padding: var(--space-3) var(--space-6);
+    font-size: var(--text-body);
+    font-weight: 600;
+    cursor: pointer;
+    min-height: 2.75rem;
+  }
+</style>
