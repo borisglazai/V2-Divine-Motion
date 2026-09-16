@@ -7,7 +7,9 @@ import * as media from "@/lib/db/media";
 import { readFormRedirect } from "@/lib/admin/formRedirect";
 
 const identity = Astro.locals.adminIdentity!;
-const readyMedia = (await media.listMedia(getDb())).filter((m) => m.processing_status === "ready");
+const readyMedia = media.sortMediaForPicker(
+  (await media.listMedia(getDb())).filter((m) => m.processing_status === "ready"),
+);
 
 const { errors, values } = readFormRedirect(Astro.url);
 const prefill = {

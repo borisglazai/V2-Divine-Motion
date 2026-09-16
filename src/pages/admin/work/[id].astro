@@ -26,7 +26,9 @@ const draft = row.status === "draft" ? row : await work.getWorkItemDraft(db, row
 const publishedRow = row.status === "published" ? row : row.draft_of_id ? await work.getWorkItem(db, row.draft_of_id) : null;
 const formSource = draft ?? publishedRow ?? row;
 
-const readyMedia = (await media.listMedia(db)).filter((m) => m.processing_status === "ready");
+const readyMedia = media.sortMediaForPicker(
+  (await media.listMedia(db)).filter((m) => m.processing_status === "ready"),
+);
 const flash = readFlash(Astro.url);
 const { errors } = readFormRedirect(Astro.url);
 ---

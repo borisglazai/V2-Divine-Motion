@@ -46,7 +46,9 @@ const { media, selectedId = null, error } = Astro.props;
             <span class="media-picker__dims">
               {item.width && item.height ? `${item.width} × ${item.height}` : "Dimensions inconnues"}
             </span>
-            {item.publication_rights_confirmed !== 1 && (
+            {item.publication_rights_confirmed === 1 ? (
+              <span class="media-picker__rights-badge media-picker__rights-badge--confirmed">Droits confirmés</span>
+            ) : (
               <span class="media-picker__rights-badge">Droits non confirmés — publication bloquée</span>
             )}
           </span>
@@ -124,8 +126,16 @@ const { media, selectedId = null, error } = Astro.props;
     color: var(--color-text-secondary);
   }
 
+  /* Not-confirmed is the default (matches media/[id].astro's
+     .media-form__rights-status convention) — the confirmed variant below
+     overrides it. Same colors as that page, so "confirmed" always means
+     the same thing everywhere in the admin. */
   .media-picker__rights-badge {
     font-size: var(--text-micro);
+    color: #e08a80;
+  }
+
+  .media-picker__rights-badge--confirmed {
     color: var(--color-accent-warm);
   }
 

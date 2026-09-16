@@ -31,6 +31,31 @@ export async function listMedia(db: D1Database, options: ListMediaOptions = {}):
   return results;
 }
 
+/**
+ * Ordering for the Work item media picker only (Validation Brief 014S bug
+ * fix) — never changes `listMedia()`'s own order, which the Médiathèque
+ * list still relies on (`created_at DESC`, unchanged). `listMedia()`
+ * already returns rows newest-first; a stable sort here (guaranteed by the
+ * spec since ES2019) that only reorders by rights-confirmed status leaves
+ * each group's relative recency intact — the net order is "rights
+ * confirmed, newest first" then "rights not confirmed, newest first".
+ *
+ * Root cause this fixes: nothing ever filtered out rights-unconfirmed
+ * media from the picker (that was never the bug — a media with
+ * unconfirmed rights is legitimately still selectable for a draft, only
+ * *publishing* the language is blocked, see `work.ts`/`testimonials.ts`).
+ * The real defect was that an admin's newest *uploads* (frequently
+ * rights-unconfirmed, fresh off the upload flow) always sorted ahead of
+ * older, deliberately rights-confirmed media — on a media library that
+ * has accumulated many rows (exactly what real upload/staging validation
+ * testing produces), the confirmed media an admin actually wants to use
+ * could sit far enough down the picker's scrollable list to look absent
+ * entirely, with no change of state and no amount of reloading fixing it.
+ */
+export function sortMediaForPicker(media: MediaRow[]): MediaRow[] {
+  return [...media].sort((a, b) => b.publication_rights_confirmed - a.publication_rights_confirmed);
+}
+
 export interface CreateMediaInput {
   storageKey: string;
   originalFilename?: string;

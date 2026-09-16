@@ -75,6 +75,13 @@ function workItemForm(overrides: Record<string, string> = {}): FormData {
   return fd;
 }
 
+function languageStatusForm(locale: "fr" | "en", status: "draft" | "published" | "archived"): FormData {
+  const fd = new FormData();
+  fd.set("locale", locale);
+  fd.set("status", status);
+  return fd;
+}
+
 describe("CMS Travail — full create -> save -> publish cycle", () => {
   let draftId: number;
 
@@ -301,8 +308,13 @@ describe("CMS Travail — media picker only offers ready, non-deleted media", ()
       mimeType: "image/jpeg",
       sizeBytes: 100,
     });
-    assert.ok(readyMedia.ok && pendingMedia.ok && failedMedia.ok && deletedMedia.ok);
-    if (!readyMedia.ok || !pendingMedia.ok || !failedMedia.ok || !deletedMedia.ok) return;
+    const abandonedMedia = await media.createMediaMetadata(db, {
+      storageKey: "media/cms-test-abandoned.jpg",
+      mimeType: "image/jpeg",
+      sizeBytes: 100,
+    });
+    assert.ok(readyMedia.ok && pendingMedia.ok && failedMedia.ok && deletedMedia.ok && abandonedMedia.ok);
+    if (!readyMedia.ok || !pendingMedia.ok || !failedMedia.ok || !deletedMedia.ok || !abandonedMedia.ok) return;
 
     // Brief 014: 'ready' is only reachable from 'uploaded' — the real
     // upload-complete flow always confirms R2 presence (markMediaUploaded)
@@ -314,16 +326,89 @@ describe("CMS Travail — media picker only offers ready, non-deleted media", ()
     await media.markMediaUploaded(db, deletedMedia.data.id);
     await media.markMediaReady(db, deletedMedia.data.id, { width: 100, height: 100 });
     await media.softDeleteMedia(db, deletedMedia.data.id);
+    await media.abandonStalePendingMedia(db, -1000); // abandonedMedia stays 'pending' otherwise — force it abandoned
 
     // Exactly what src/pages/admin/work/new.astro and [id].astro do before
-    // handing the list to <MediaPickerField>.
-    const pickerMedia = (await media.listMedia(db)).filter((m) => m.processing_status === "ready");
+    // handing the list to <MediaPickerField> (Validation Brief 014S: the
+    // sort was added on top of this same filter, never a change to it).
+    const pickerMedia = media.sortMediaForPicker((await media.listMedia(db)).filter((m) => m.processing_status === "ready"));
     const pickerIds = new Set(pickerMedia.map((m) => m.id));
 
     assert.ok(pickerIds.has(readyMedia.data.id), "ready media must be offered");
     assert.ok(!pickerIds.has(pendingMedia.data.id), "pending media must not be offered");
     assert.ok(!pickerIds.has(failedMedia.data.id), "failed media must not be offered");
     assert.ok(!pickerIds.has(deletedMedia.data.id), "deleted media must not be offered, even though it was ready");
+    assert.ok(!pickerIds.has(abandonedMedia.data.id), "abandoned media must not be offered");
+  });
+
+  test("Validation Brief 014S — a rights-confirmed media sorts ahead of newer rights-unconfirmed media in the real picker order", async () => {
+    const olderConfirmed = await media.createMediaMetadata(db, {
+      storageKey: "media/014s-older-confirmed.jpg",
+      mimeType: "image/jpeg",
+      sizeBytes: 100,
+    });
+    assert.ok(olderConfirmed.ok);
+    if (!olderConfirmed.ok) return;
+    await media.markMediaUploaded(db, olderConfirmed.data.id);
+    await media.markMediaReady(db, olderConfirmed.data.id, { width: 100, height: 100 });
+    await media.updateMediaMetadata(db, olderConfirmed.data.id, { publicationRightsConfirmed: true }, UPDATED_BY);
+
+    // Newer uploads, created after — same shape as fresh test uploads
+    // landing on top of a growing media library, unconfirmed by default.
+    for (const key of ["media/014s-newer-unconfirmed-1.jpg", "media/014s-newer-unconfirmed-2.jpg"]) {
+      const created = await media.createMediaMetadata(db, { storageKey: key, mimeType: "image/jpeg", sizeBytes: 100 });
+      assert.ok(created.ok);
+      if (!created.ok) continue;
+      await media.markMediaUploaded(db, created.data.id);
+      await media.markMediaReady(db, created.data.id, { width: 100, height: 100 });
+    }
+
+    const pickerMedia = media.sortMediaForPicker((await media.listMedia(db)).filter((m) => m.processing_status === "ready"));
+    const olderConfirmedIndex = pickerMedia.findIndex((m) => m.id === olderConfirmed.data.id);
+
+    assert.notEqual(olderConfirmedIndex, -1, "the confirmed media must still be present");
+    assert.equal(pickerMedia[olderConfirmedIndex].publication_rights_confirmed, 1);
+    // Every unconfirmed media in this run must rank AFTER it, no matter how recently uploaded.
+    for (let i = 0; i < olderConfirmedIndex; i++) {
+      assert.equal(pickerMedia[i].publication_rights_confirmed, 1, `entry #${i} ranked ahead of the confirmed media but isn't itself confirmed`);
+    }
+  });
+
+  test("Validation Brief 014S — an unconfirmed-rights ready media stays selectable for a draft, but publishing its language stays blocked until rights are confirmed", async () => {
+    const unrighted = await media.createMediaMetadata(db, {
+      storageKey: "media/014s-unrighted-usable.jpg",
+      mimeType: "image/jpeg",
+      sizeBytes: 100,
+    });
+    assert.ok(unrighted.ok);
+    if (!unrighted.ok) return;
+    await media.markMediaUploaded(db, unrighted.data.id);
+    await media.markMediaReady(db, unrighted.data.id, { width: 100, height: 100 });
+
+    // Still offered by the picker (never excluded for lacking rights).
+    const pickerMedia = media.sortMediaForPicker((await media.listMedia(db)).filter((m) => m.processing_status === "ready"));
+    assert.ok(pickerMedia.some((m) => m.id === unrighted.data.id), "unconfirmed media must still be offered in the picker");
+
+    // Still usable to create and publish a draft's CONTENT (curation is
+    // never gated on rights — only making a language live is).
+    const created = await createWorkItemAction(db, workItemForm({ mediaId: String(unrighted.data.id) }), UPDATED_BY);
+    const draftId = Number(created.redirect.match(/\/admin\/work\/(\d+)/)![1]);
+    const published = await publishWorkItemAction(db, draftId, UPDATED_BY);
+    assert.match(published.redirect, /flash=success/);
+    const publishedId = Number(published.redirect.match(/\/admin\/work\/(\d+)/)![1]);
+
+    // Publishing the FR language is refused — clear business error, not a raw SQL failure.
+    const blocked = await setWorkItemLanguageStatusAction(db, publishedId, languageStatusForm("fr", "published"), UPDATED_BY);
+    assert.match(blocked.redirect, /flash=error/);
+    const row = await work.getWorkItem(db, publishedId);
+    assert.equal(row!.fr_status, "draft", "the language must remain unpublished while rights are unconfirmed");
+
+    // Confirm rights, then the exact same publish action succeeds.
+    await media.updateMediaMetadata(db, unrighted.data.id, { publicationRightsConfirmed: true }, UPDATED_BY);
+    const allowed = await setWorkItemLanguageStatusAction(db, publishedId, languageStatusForm("fr", "published"), UPDATED_BY);
+    assert.match(allowed.redirect, /flash=success/);
+    const rowAfter = await work.getWorkItem(db, publishedId);
+    assert.equal(rowAfter!.fr_status, "published");
   });
 
   test("createWorkItemAction itself refuses a mediaId that isn't ready/not deleted, even if the client bypassed the picker", async () => {
