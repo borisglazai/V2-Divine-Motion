@@ -132,6 +132,8 @@ export interface ServiceRow extends Publishable {
   slug: string;
   title_fr: string;
   title_en: string;
+  tagline_fr: string | null;
+  tagline_en: string | null;
   description_fr: string;
   description_en: string;
   media_id: number;

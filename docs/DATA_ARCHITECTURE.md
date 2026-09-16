@@ -71,7 +71,9 @@ site_settings       : singleton (id = 1)
 
 ## Services model
 
-`services` — exactement 3 lignes MVP. **`layout` n'est plus une colonne D1 (Review 009A)** : les trois compositions (wide-offset/split/text-image) sont une décision de présentation frontend, associée à l'identifiant stable `slug` — voir ADR-014. `service_features` porte la liste de 2-3 puces par service. Porte le mécanisme brouillon/publié uniforme.
+`services` — 3 lignes MVP au départ (Mariages/Portraits/Événements). **`layout` n'est plus une colonne D1 (Review 009A)** : les trois compositions (wide-offset/split/text-image) sont une décision de présentation frontend, associée à l'identifiant stable `slug` — voir ADR-014. `service_features` porte la liste de 2-3 puces par service. Porte le mécanisme brouillon/publié uniforme.
+
+**Mise à jour — Services CMS.** Le schéma n'a jamais imposé de plafond à 3 lignes (aucune contrainte technique de comptage) ; le module CMS construit sur ce schéma permet d'en créer d'autres (`resolveServiceLayout`, `src/lib/service-layout.ts`, fait tourner cycliquement les 3 mêmes variantes de layout pour toute offre au-delà des 3 initiales — voir ADR-014, addendum). Deux colonnes additives (`tagline_fr`/`tagline_en`, nullables) et les 3 triggers de droits de publication manquants ont été ajoutés en `migrations/0004_services_cms.sql` — voir ADR-011, addendum.
 
 ## Testimonials model
 

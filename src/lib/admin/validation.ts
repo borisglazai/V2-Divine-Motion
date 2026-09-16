@@ -29,6 +29,22 @@ export interface ParsedWorkItemForm {
 const ALLOWED_CATEGORIES = new Set(["wedding", "portrait", "event"]);
 const RATIO_PATTERN = /^\d+\s*\/\s*\d+$/;
 
+/** Field list for buildFormRedirect's round-trip — see src/lib/admin/formRedirect.ts. */
+export const WORK_ITEM_FORM_FIELDS = [
+  "mediaId",
+  "category",
+  "position",
+  "ratio",
+  "captionFr",
+  "captionEn",
+  "altFr",
+  "altEn",
+  "focalX",
+  "focalY",
+  "isVisible",
+  "featuredOnHome",
+] as const;
+
 function stringField(formData: FormData, key: string): string {
   const value = formData.get(key);
   return typeof value === "string" ? value.trim() : "";

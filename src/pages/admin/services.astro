@@ -1,11 +1,284 @@
 ---
 export const prerender = false;
 import AdminLayout from "@/layouts/AdminLayout.astro";
-import AdminPlaceholder from "@/components/admin/AdminPlaceholder.astro";
+import FlashMessage from "@/components/admin/FlashMessage.astro";
+import ImageFrame from "@/components/ImageFrame.astro";
+import { getDb } from "@/lib/db/client";
+import * as services from "@/lib/db/services";
+import { readFlash } from "@/lib/admin/flash";
+import { mediaFileUrl } from "@/lib/admin/media-preview";
+import type { ServiceRow } from "@/lib/db/types";
 
 const identity = Astro.locals.adminIdentity!;
+const flash = readFlash(Astro.url);
+
+let publishedItems: ServiceRow[] = [];
+let draftByPublishedId = new Map<number, ServiceRow>();
+let newDrafts: ServiceRow[] = [];
+let dbUnavailable = false;
+
+try {
+  const all = await services.listAllServices(getDb());
+  publishedItems = all.filter((r) => r.status === "published").sort((a, b) => a.position - b.position);
+  const drafts = all.filter((r) => r.status === "draft");
+  draftByPublishedId = new Map(
+    drafts.filter((d): d is ServiceRow & { draft_of_id: number } => d.draft_of_id !== null).map((d) => [d.draft_of_id, d]),
+  );
+  newDrafts = drafts.filter((d) => d.draft_of_id === null);
+} catch (err) {
+  console.error("admin services list: D1 read failed", err instanceof Error ? err.message : err);
+  dbUnavailable = true;
+}
+
+const orderedPublishedIds = publishedItems.map((r) => r.id);
+
+function orderWithSwap(ids: number[], index: number, direction: -1 | 1): string {
+  const target = index + direction;
+  if (target < 0 || target >= ids.length) return JSON.stringify(ids);
+  const next = [...ids];
+  [next[index], next[target]] = [next[target], next[index]];
+  return JSON.stringify(next);
+}
+
+function statusLabel(status: string): string {
+  return status === "published" ? "Publié" : "Brouillon";
+}
 ---
 
 <AdminLayout activeId="services" title="Services" identity={identity}>
-  <AdminPlaceholder moduleName="Services" />
+  <FlashMessage flash={flash} />
+
+  {
+    dbUnavailable ? (
+      <p class="admin-db-error" role="alert">
+        Les données ne sont pas disponibles pour le moment. Réessayez dans un instant.
+      </p>
+    ) : (
+      <>
+        <div class="service-list__header">
+          <p class="service-list__note">
+            Le réordonnancement ne modifie que les brouillons — l'ordre public ne change qu'après une publication
+            explicite de chaque élément déplacé (voir <a href="/admin/services/new">créer un nouveau service</a>).
+          </p>
+          <a class="service-list__new-button" href="/admin/services/new">
+            + Nouveau service
+          </a>
+        </div>
+
+        <ul class="service-list">
+          {publishedItems.map((item, index) => {
+            const draft = draftByPublishedId.get(item.id);
+            return (
+              <li class="service-card">
+                <ImageFrame src={mediaFileUrl(item.media_id)} alt="" ratio={item.ratio} class="service-card__thumb" />
+                <div class="service-card__body">
+                  <p class="service-card__title">
+                    {item.title_fr} — position {item.position}
+                  </p>
+                  <p class="service-card__status">
+                    FR : <strong>{statusLabel(item.fr_status)}</strong> · EN : <strong>{statusLabel(item.en_status)}</strong> ·{" "}
+                    {item.is_active ? "Visible" : "Masqué"}
+                  </p>
+                  <p class="service-card__draft-state">{draft ? "Brouillon en attente de publication" : "Aucun brouillon ouvert"}</p>
+
+                  <div class="service-card__actions">
+                    <a href={`/admin/services/${item.id}`}>Modifier</a>
+                    {draft && (
+                      <form method="POST" action={`/admin/services/${draft.id}/publish`}>
+                        <button type="submit">Publier</button>
+                      </form>
+                    )}
+                    {draft && (
+                      <form method="POST" action={`/admin/services/${draft.id}/delete-draft`}>
+                        <button type="submit" class="service-card__danger">
+                          Supprimer le brouillon
+                        </button>
+                      </form>
+                    )}
+                  </div>
+
+                  <div class="service-card__reorder" role="group" aria-label={`Réordonner ${item.title_fr}`}>
+                    <form method="POST" action="/admin/services/reorder">
+                      <input type="hidden" name="orderedIds" value={orderWithSwap(orderedPublishedIds, index, -1)} />
+                      <button type="submit" disabled={index === 0} aria-label="Monter">
+                        ▲ Monter
+                      </button>
+                    </form>
+                    <form method="POST" action="/admin/services/reorder">
+                      <input
+                        type="hidden"
+                        name="orderedIds"
+                        value={orderWithSwap(orderedPublishedIds, index, 1)}
+                      />
+                      <button type="submit" disabled={index === publishedItems.length - 1} aria-label="Descendre">
+                        ▼ Descendre
+                      </button>
+                    </form>
+                  </div>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+
+        {newDrafts.length > 0 && (
+          <>
+            <h2 class="service-list__section-title">Brouillons non publiés</h2>
+            <ul class="service-list">
+              {newDrafts.map((draft) => (
+                <li class="service-card">
+                  <ImageFrame src={mediaFileUrl(draft.media_id)} alt="" ratio={draft.ratio} class="service-card__thumb" />
+                  <div class="service-card__body">
+                    <p class="service-card__title">Brouillon — {draft.title_fr || "sans titre"} — jamais publié</p>
+                    <div class="service-card__actions">
+                      <a href={`/admin/services/${draft.id}`}>Modifier</a>
+                      <form method="POST" action={`/admin/services/${draft.id}/publish`}>
+                        <button type="submit">Publier</button>
+                      </form>
+                      <form method="POST" action={`/admin/services/${draft.id}/delete-draft`}>
+                        <button type="submit" class="service-card__danger">
+                          Supprimer le brouillon
+                        </button>
+                      </form>
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
+      </>
+    )
+  }
 </AdminLayout>
+
+<style>
+  .admin-db-error {
+    padding: var(--space-6);
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-md);
+    color: var(--color-text-secondary);
+  }
+
+  .service-list__header {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: center;
+    gap: var(--space-4);
+    margin-bottom: var(--space-6);
+  }
+
+  .service-list__note {
+    color: var(--color-text-secondary);
+    font-size: var(--text-small);
+    max-width: 40rem;
+  }
+
+  .service-list__new-button {
+    background: var(--color-accent-warm);
+    color: var(--color-bg-primary);
+    border-radius: var(--radius-sm);
+    padding: var(--space-3) var(--space-5);
+    font-weight: 600;
+    text-decoration: none;
+    white-space: nowrap;
+  }
+
+  .service-list__section-title {
+    font-family: var(--font-serif);
+    font-size: var(--text-h3);
+    color: var(--color-text-primary);
+    margin-block: var(--space-8) var(--space-4);
+  }
+
+  .service-list {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: var(--space-4);
+  }
+
+  .service-card {
+    display: flex;
+    gap: var(--space-4);
+    background: var(--color-surface-admin);
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-md);
+    padding: var(--space-4);
+  }
+
+  .service-card__thumb {
+    width: 5rem;
+    flex-shrink: 0;
+  }
+
+  .service-card__body {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    min-width: 0;
+  }
+
+  .service-card__title {
+    color: var(--color-text-primary);
+    font-weight: 600;
+  }
+
+  .service-card__status,
+  .service-card__draft-state {
+    color: var(--color-text-secondary);
+    font-size: var(--text-small);
+  }
+
+  .service-card__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-3);
+    margin-top: var(--space-2);
+  }
+
+  .service-card__actions a,
+  .service-card__actions button {
+    font-size: var(--text-small);
+    color: var(--color-text-primary);
+    background: none;
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-sm);
+    padding: var(--space-2) var(--space-3);
+    cursor: pointer;
+    min-height: 2.5rem;
+    text-decoration: none;
+  }
+
+  .service-card__danger {
+    color: #e08a80;
+  }
+
+  .service-card__reorder {
+    display: flex;
+    gap: var(--space-2);
+    margin-top: var(--space-2);
+  }
+
+  .service-card__reorder button {
+    font-size: var(--text-small);
+    background: none;
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-sm);
+    padding: var(--space-2) var(--space-3);
+    color: var(--color-text-primary);
+    cursor: pointer;
+    min-height: 2.5rem;
+  }
+
+  .service-card__reorder button:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+
+  @media (min-width: 768px) {
+    .service-card {
+      align-items: center;
+    }
+  }
+</style>

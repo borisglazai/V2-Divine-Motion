@@ -23,9 +23,10 @@
     "test:auth": "node --import tsx --test tests/auth/access.test.ts tests/auth/mutation.test.ts",
     "test:admin": "node --test tests/admin/routes.test.mjs",
     "test:cms:work": "node --import tsx --test tests/admin/work-validation.test.ts tests/admin/work-endpoints.test.ts tests/admin/media-preview.test.ts",
+    "test:cms:services": "node --import tsx --test tests/admin/services-validation.test.ts tests/admin/services-endpoints.test.ts",
     "test:storage": "node --import tsx --test tests/storage/keys.test.ts tests/storage/image-inspect.test.ts tests/storage/r2-presign.test.ts",
     "test:media": "node --import tsx --test tests/admin/media-actions.test.ts",
-    "test:public": "node --import tsx --test tests/public/work-gallery-adapter.test.ts tests/public/public-media.test.ts tests/public/work-view.test.ts"
+    "test:public": "node --import tsx --test tests/public/work-gallery-adapter.test.ts tests/public/public-media.test.ts tests/public/work-view.test.ts tests/public/service-layout.test.ts tests/public/services-view.test.ts"
   },
   "dependencies": {
     "@astrojs/cloudflare": "^14.3.1",

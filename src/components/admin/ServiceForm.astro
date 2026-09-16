@@ -1,0 +1,271 @@
+---
+import type { MediaRow, ServiceFeatureRow } from "@/lib/db/types";
+import MediaPickerField from "./MediaPickerField.astro";
+import type { ServiceFormErrors } from "@/lib/admin/services-validation";
+
+interface Values {
+  mediaId?: number | null;
+  slug?: string;
+  position?: number;
+  ratio?: string;
+  titleFr?: string;
+  titleEn?: string;
+  taglineFr?: string | null;
+  taglineEn?: string | null;
+  descriptionFr?: string;
+  descriptionEn?: string;
+  imageAltFr?: string;
+  imageAltEn?: string;
+  ctaLabelFr?: string;
+  ctaLabelEn?: string;
+  isActive?: boolean;
+}
+
+interface Props {
+  action: string;
+  submitLabel: string;
+  media: MediaRow[];
+  values?: Values;
+  features?: ServiceFeatureRow[];
+  errors?: ServiceFormErrors;
+}
+
+const { action, submitLabel, media, values = {}, features = [], errors = {} } = Astro.props;
+const v = {
+  slug: values.slug ?? "",
+  position: values.position ?? 1,
+  ratio: values.ratio ?? "4/5",
+  titleFr: values.titleFr ?? "",
+  titleEn: values.titleEn ?? "",
+  taglineFr: values.taglineFr ?? "",
+  taglineEn: values.taglineEn ?? "",
+  descriptionFr: values.descriptionFr ?? "",
+  descriptionEn: values.descriptionEn ?? "",
+  imageAltFr: values.imageAltFr ?? "",
+  imageAltEn: values.imageAltEn ?? "",
+  ctaLabelFr: values.ctaLabelFr ?? "",
+  ctaLabelEn: values.ctaLabelEn ?? "",
+  isActive: values.isActive ?? true,
+};
+// Always exactly 3 rows in the form (padded with empty ones) — matches
+// the "Max 3" content discipline already established by the pre-CMS
+// mock (src/data/mock/services.ts), enforced server-side too (see
+// parseServiceFeatures, src/lib/admin/services-validation.ts).
+const featureRows = Array.from({ length: 3 }, (_, i) => features[i] ?? { text_fr: "", text_en: "" });
+---
+
+<form method="POST" action={action} class="service-form" novalidate>
+  <MediaPickerField media={media} selectedId={values.mediaId ?? null} error={errors.mediaId} />
+
+  <div class="service-form__grid">
+    <div class="field">
+      <label for="slug">Identifiant technique (slug)</label>
+      <input id="slug" name="slug" type="text" placeholder="mariage-en-plein-air" value={v.slug} aria-invalid={errors.slug ? "true" : undefined} aria-describedby={errors.slug ? "slug-error" : undefined} required />
+      <p class="field__hint">Ne change jamais l'apparence du site — sert uniquement de référence interne stable.</p>
+      {errors.slug && <p class="field__error" id="slug-error" role="alert">{errors.slug}</p>}
+    </div>
+
+    <div class="field">
+      <label for="position">Ordre d'affichage</label>
+      <input id="position" name="position" type="number" min="1" step="1" value={v.position} aria-invalid={errors.position ? "true" : undefined} aria-describedby={errors.position ? "position-error" : undefined} required />
+      {errors.position && <p class="field__error" id="position-error" role="alert">{errors.position}</p>}
+    </div>
+
+    <div class="field">
+      <label for="ratio">Ratio de l'image (largeur/hauteur)</label>
+      <input id="ratio" name="ratio" type="text" placeholder="4/5" value={v.ratio} aria-invalid={errors.ratio ? "true" : undefined} aria-describedby={errors.ratio ? "ratio-error" : undefined} required />
+      {errors.ratio && <p class="field__error" id="ratio-error" role="alert">{errors.ratio}</p>}
+    </div>
+  </div>
+
+  <fieldset class="service-form__locale">
+    <legend>Contenu — Français</legend>
+
+    <div class="field">
+      <label for="titleFr">Nom du service</label>
+      <input id="titleFr" name="titleFr" type="text" value={v.titleFr} aria-invalid={errors.titleFr ? "true" : undefined} aria-describedby={errors.titleFr ? "titleFr-error" : undefined} required />
+      {errors.titleFr && <p class="field__error" id="titleFr-error" role="alert">{errors.titleFr}</p>}
+    </div>
+
+    <div class="field">
+      <label for="taglineFr">Courte accroche (facultative)</label>
+      <input id="taglineFr" name="taglineFr" type="text" value={v.taglineFr} />
+    </div>
+
+    <div class="field">
+      <label for="descriptionFr">Description</label>
+      <textarea id="descriptionFr" name="descriptionFr" rows="3" aria-invalid={errors.descriptionFr ? "true" : undefined} aria-describedby={errors.descriptionFr ? "descriptionFr-error" : undefined} required>{v.descriptionFr}</textarea>
+      {errors.descriptionFr && <p class="field__error" id="descriptionFr-error" role="alert">{errors.descriptionFr}</p>}
+    </div>
+
+    <div class="field">
+      <label for="imageAltFr">Texte alternatif de l'image</label>
+      <input id="imageAltFr" name="imageAltFr" type="text" value={v.imageAltFr} aria-invalid={errors.imageAltFr ? "true" : undefined} aria-describedby={errors.imageAltFr ? "imageAltFr-error" : undefined} required />
+      {errors.imageAltFr && <p class="field__error" id="imageAltFr-error" role="alert">{errors.imageAltFr}</p>}
+    </div>
+
+    <div class="field">
+      <label for="ctaLabelFr">Texte du bouton d'appel à l'action</label>
+      <input id="ctaLabelFr" name="ctaLabelFr" type="text" placeholder="Parler de votre projet" value={v.ctaLabelFr} aria-invalid={errors.ctaLabelFr ? "true" : undefined} aria-describedby={errors.ctaLabelFr ? "ctaLabelFr-error" : undefined} required />
+      {errors.ctaLabelFr && <p class="field__error" id="ctaLabelFr-error" role="alert">{errors.ctaLabelFr}</p>}
+    </div>
+
+    <div class="field">
+      <span class="field__label-static">Points forts (jusqu'à 3, facultatifs)</span>
+      {featureRows.map((f, i) => (
+        <input name="featureTextFr" type="text" placeholder={`Point fort ${i + 1}`} value={f.text_fr} class="service-form__feature-input" />
+      ))}
+    </div>
+  </fieldset>
+
+  <fieldset class="service-form__locale">
+    <legend>Contenu — English</legend>
+
+    <div class="field">
+      <label for="titleEn">Service name</label>
+      <input id="titleEn" name="titleEn" type="text" value={v.titleEn} aria-invalid={errors.titleEn ? "true" : undefined} aria-describedby={errors.titleEn ? "titleEn-error" : undefined} required />
+      {errors.titleEn && <p class="field__error" id="titleEn-error" role="alert">{errors.titleEn}</p>}
+    </div>
+
+    <div class="field">
+      <label for="taglineEn">Short hook (optional)</label>
+      <input id="taglineEn" name="taglineEn" type="text" value={v.taglineEn} />
+    </div>
+
+    <div class="field">
+      <label for="descriptionEn">Description</label>
+      <textarea id="descriptionEn" name="descriptionEn" rows="3" aria-invalid={errors.descriptionEn ? "true" : undefined} aria-describedby={errors.descriptionEn ? "descriptionEn-error" : undefined} required>{v.descriptionEn}</textarea>
+      {errors.descriptionEn && <p class="field__error" id="descriptionEn-error" role="alert">{errors.descriptionEn}</p>}
+    </div>
+
+    <div class="field">
+      <label for="imageAltEn">Image alt text</label>
+      <input id="imageAltEn" name="imageAltEn" type="text" value={v.imageAltEn} aria-invalid={errors.imageAltEn ? "true" : undefined} aria-describedby={errors.imageAltEn ? "imageAltEn-error" : undefined} required />
+      {errors.imageAltEn && <p class="field__error" id="imageAltEn-error" role="alert">{errors.imageAltEn}</p>}
+    </div>
+
+    <div class="field">
+      <label for="ctaLabelEn">Call-to-action button text</label>
+      <input id="ctaLabelEn" name="ctaLabelEn" type="text" placeholder="Talk about your project" value={v.ctaLabelEn} aria-invalid={errors.ctaLabelEn ? "true" : undefined} aria-describedby={errors.ctaLabelEn ? "ctaLabelEn-error" : undefined} required />
+      {errors.ctaLabelEn && <p class="field__error" id="ctaLabelEn-error" role="alert">{errors.ctaLabelEn}</p>}
+    </div>
+
+    <div class="field">
+      <span class="field__label-static">Highlights (up to 3, optional)</span>
+      {featureRows.map((f, i) => (
+        <input name="featureTextEn" type="text" placeholder={`Highlight ${i + 1}`} value={f.text_en} class="service-form__feature-input" />
+      ))}
+    </div>
+  </fieldset>
+
+  <label class="checkbox-field">
+    <input type="checkbox" name="isActive" checked={v.isActive} />
+    Visible sur le site
+  </label>
+
+  <button type="submit" class="service-form__submit">{submitLabel}</button>
+</form>
+
+<style>
+  .service-form {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-6);
+    max-width: 40rem;
+  }
+
+  .service-form__grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(12rem, 1fr));
+    gap: var(--space-4);
+  }
+
+  .service-form__locale {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-md);
+    padding: var(--space-4);
+  }
+
+  .service-form__locale legend {
+    font-size: var(--text-small);
+    color: var(--color-text-secondary);
+    padding-inline: var(--space-2);
+  }
+
+  .service-form__feature-input {
+    margin-top: var(--space-2);
+  }
+
+  .field {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+  }
+
+  .field label,
+  .field__label-static {
+    font-size: var(--text-small);
+    color: var(--color-text-secondary);
+  }
+
+  .field input,
+  .field textarea {
+    background: var(--color-surface-admin);
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-sm);
+    color: var(--color-text-primary);
+    padding: var(--space-2) var(--space-3);
+    min-height: 2.75rem;
+    font-size: var(--text-body);
+    font-family: inherit;
+  }
+
+  .field textarea {
+    resize: vertical;
+  }
+
+  .field input[aria-invalid="true"],
+  .field textarea[aria-invalid="true"] {
+    border-color: #c2554b;
+  }
+
+  .field__hint {
+    font-size: var(--text-micro);
+    color: var(--color-text-secondary);
+  }
+
+  .field__error {
+    color: #e08a80;
+    font-size: var(--text-small);
+  }
+
+  .checkbox-field {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    font-size: var(--text-body);
+    color: var(--color-text-primary);
+    min-height: 2.75rem;
+  }
+
+  .checkbox-field input {
+    width: 1.25rem;
+    height: 1.25rem;
+  }
+
+  .service-form__submit {
+    align-self: flex-start;
+    background: var(--color-accent-warm);
+    color: var(--color-bg-primary);
+    border: none;
+    border-radius: var(--radius-sm);
+    padding: var(--space-3) var(--space-6);
+    font-size: var(--text-body);
+    font-weight: 600;
+    cursor: pointer;
+    min-height: 2.75rem;
+  }
+</style>

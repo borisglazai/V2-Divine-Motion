@@ -58,11 +58,14 @@ describe("schema applies", () => {
     assert.ok(!cols.includes("layout"));
   });
 
-  test("the 6 publication-rights triggers exist (4 from 0001 + 2 media-change guards from 0002, CMS Work Patch 013A)", () => {
+  test("the 9 publication-rights triggers exist (4 from 0001 + 2 media-change guards from 0002 + 3 services guards from 0004, Services CMS brief)", () => {
     const names = rows(
       "SELECT name FROM sqlite_master WHERE type='trigger' ORDER BY name;",
     ).map((r) => r.name);
     assert.deepEqual(names, [
+      "trg_services_rights_gate_en",
+      "trg_services_rights_gate_fr",
+      "trg_services_rights_gate_media_change",
       "trg_testimonials_rights_gate_en",
       "trg_testimonials_rights_gate_fr",
       "trg_testimonials_rights_gate_media_change",
@@ -70,6 +73,27 @@ describe("schema applies", () => {
       "trg_work_items_rights_gate_fr",
       "trg_work_items_rights_gate_media_change",
     ]);
+  });
+
+  test("services.tagline_fr/tagline_en exist (0004) and are nullable", () => {
+    const cols = rows("PRAGMA table_info(services);");
+    for (const name of ["tagline_fr", "tagline_en"]) {
+      const col = cols.find((c) => c.name === name);
+      assert.ok(col, `${name} column must exist`);
+      assert.equal(col.notnull, 0, `${name} must be nullable — no source of truth to backfill existing rows from`);
+    }
+  });
+
+  test("services rights-gate trigger blocks publishing FR with an unrighted media (0004)", () => {
+    execD1(
+      "INSERT INTO media (storage_key, mime_type, size_bytes, uploaded_at, created_at, updated_at) VALUES ('media/0004-unrighted.jpg','image/jpeg',1,1,1,1);",
+    );
+    const mediaId = rows("SELECT id FROM media WHERE storage_key = 'media/0004-unrighted.jpg';")[0].id;
+    execD1(
+      `INSERT INTO services (status, slug, title_fr, title_en, description_fr, description_en, media_id, ratio, image_alt_fr, image_alt_en, cta_label_fr, cta_label_en, position, created_at, updated_at) VALUES ('published', '0004-test-slug', 't', 't', 'd', 'd', ${mediaId}, '4/5', 'a', 'a', 'c', 'c', 999, 0, 0);`,
+    );
+    const err = expectSqlError(`UPDATE services SET fr_status = 'published' WHERE slug = '0004-test-slug';`);
+    assert.match(err, /cannot publish FR — media publication rights not confirmed/);
   });
 
   // Implementation Brief 014, ADR-017. See

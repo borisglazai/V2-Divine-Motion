@@ -17,7 +17,7 @@
  */
 import { getMedia } from "@/lib/db/media";
 import * as work from "@/lib/db/work";
-import { isValidLanguageStatus, isValidLocale, parseWorkItemForm } from "./validation";
+import { WORK_ITEM_FORM_FIELDS, isValidLanguageStatus, isValidLocale, parseWorkItemForm } from "./validation";
 import { buildFormRedirect } from "./formRedirect";
 import { withFlash } from "./flash";
 import { adminErrorMessage } from "./errors";
@@ -35,7 +35,7 @@ export async function createWorkItemAction(
   updatedBy: string,
 ): Promise<{ redirect: string }> {
   const parsed = parseWorkItemForm(formData);
-  if (!parsed.ok) return { redirect: buildFormRedirect("/admin/work/new", parsed.errors, formData) };
+  if (!parsed.ok) return { redirect: buildFormRedirect("/admin/work/new", parsed.errors, formData, WORK_ITEM_FORM_FIELDS) };
 
   if (!(await mediaIsUsable(db, parsed.data.mediaId))) {
     return {
@@ -43,13 +43,14 @@ export async function createWorkItemAction(
         "/admin/work/new",
         { mediaId: "Ce média n'est pas disponible (supprimé ou non prêt)." },
         formData,
+        WORK_ITEM_FORM_FIELDS,
       ),
     };
   }
 
   const result = await work.createWorkItem(db, parsed.data, updatedBy);
   if (!result.ok) {
-    return { redirect: buildFormRedirect("/admin/work/new", { form: adminErrorMessage(result.error) }, formData) };
+    return { redirect: buildFormRedirect("/admin/work/new", { form: adminErrorMessage(result.error) }, formData, WORK_ITEM_FORM_FIELDS) };
   }
 
   return { redirect: withFlash(`/admin/work/${result.data.draftId}`, "success", "Brouillon créé.") };
@@ -65,7 +66,7 @@ export async function saveWorkItemAction(
   if (!row) return { notFound: true };
 
   const parsed = parseWorkItemForm(formData);
-  if (!parsed.ok) return { redirect: buildFormRedirect(`/admin/work/${idParam}`, parsed.errors, formData) };
+  if (!parsed.ok) return { redirect: buildFormRedirect(`/admin/work/${idParam}`, parsed.errors, formData, WORK_ITEM_FORM_FIELDS) };
 
   if (!(await mediaIsUsable(db, parsed.data.mediaId))) {
     return {
@@ -73,6 +74,7 @@ export async function saveWorkItemAction(
         `/admin/work/${idParam}`,
         { mediaId: "Ce média n'est pas disponible (supprimé ou non prêt)." },
         formData,
+        WORK_ITEM_FORM_FIELDS,
       ),
     };
   }
@@ -87,7 +89,7 @@ export async function saveWorkItemAction(
     } else {
       const created = await work.createWorkItemDraft(db, row.id, updatedBy);
       if (!created.ok) {
-        return { redirect: buildFormRedirect(`/admin/work/${idParam}`, { form: adminErrorMessage(created.error) }, formData) };
+        return { redirect: buildFormRedirect(`/admin/work/${idParam}`, { form: adminErrorMessage(created.error) }, formData, WORK_ITEM_FORM_FIELDS) };
       }
       draftId = created.data.draftId;
     }
@@ -95,7 +97,7 @@ export async function saveWorkItemAction(
 
   const updated = await work.updateWorkItemDraft(db, draftId, parsed.data, updatedBy);
   if (!updated.ok) {
-    return { redirect: buildFormRedirect(`/admin/work/${idParam}`, { form: adminErrorMessage(updated.error) }, formData) };
+    return { redirect: buildFormRedirect(`/admin/work/${idParam}`, { form: adminErrorMessage(updated.error) }, formData, WORK_ITEM_FORM_FIELDS) };
   }
 
   return { redirect: withFlash(`/admin/work/${idParam}`, "success", "Brouillon enregistré.") };

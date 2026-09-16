@@ -108,3 +108,32 @@ POST /admin/media/:id/restore
 **Upload multi-fichiers** (`src/lib/admin/media-upload-client.ts`, seul module de ce brief qui tourne dans le navigateur) : chaque fichier suit son propre cycle indépendant `authorize → PUT direct R2 → upload-complete` ; l'échec d'un fichier n'affecte jamais les autres. Statuts affichés par fichier (En attente / Upload… / Vérification… / Prêt / Échec), pourcentage réel pendant l'upload (XMLHttpRequest, pas une barre globale opaque). Réessai manuel uniquement (pas de retry automatique) — relance un cycle complet, sans toucher à la ligne D1 échouée précédente.
 
 **Sécurité des mutations** : même `requireAdminMutation` que la CMS Travail. Chaque route `:id` vérifie l'existence réelle de la ligne avant d'agir (IDOR).
+
+## Services CMS — troisième module réel
+
+`/admin/services` n'est plus un placeholder : deuxième module CMS complet après Travail, même discipline (`D1 → admin → draft → publish`), mêmes mécaniques réutilisées telles quelles (`MediaPickerField.astro`, `requireAdminMutation`, `flash.ts`, moteur `publish.ts`, `adminErrorMessage`). Services = offres réservables/commerciales (Mariage, Portrait/Lifestyle, Événements, et toute offre future) ; Travail reste l'exposition éditoriale du portfolio — les deux concepts ne sont jamais mélangés.
+
+**Routes** (`src/pages/admin/services/`) :
+```text
+GET  /admin/services                       liste (publiés + brouillons)
+GET  /admin/services/new                    formulaire de création
+GET  /admin/services/:id                    édition (:id = ligne publiée OU brouillon)
+POST /admin/services/create
+POST /admin/services/:id/save               :id = brouillon (créé automatiquement si absent)
+POST /admin/services/:id/publish            :id = brouillon
+POST /admin/services/:id/delete-draft       :id = brouillon
+POST /admin/services/:id/language-status    :id = ligne PUBLIÉE (fr_status/en_status)
+POST /admin/services/reorder                brouillons uniquement — même limitation documentée que Travail (pas de publication groupée atomique)
+```
+
+**Champ « courte accroche ».** Ni le schéma d'origine (Brief 009) ni le mock pré-CMS n'avaient de champ distinct du titre et de la description pour une accroche courte — ajouté en migration additive (`tagline_fr`/`tagline_en`, nullable, `migrations/0004_services_cms.sql`), jamais rétroactif sur 0001-0003.
+
+**Droits de publication étendus à Services.** Contrairement à Travail/Témoignages, `services` n'avait aucun garde-fou de droits (aucun trigger `trg_services_*` n'existait avant ce brief) — un vrai manque, pas une exclusion voulue, vu qu'aucun module CMS réel n'existait encore pour Services au moment d'ADR-011. `migrations/0004_services_cms.sql` ajoute les 3 mêmes triggers que Travail ; `src/lib/db/services.ts` applique le même préflight applicatif. Voir `docs/decisions/ADR-011-publication-rights-model.md` pour le détail complet.
+
+**Générique, pas plafonné à 3.** Le schéma n'a jamais imposé de limite de lignes ; `/admin/services/new` permet d'en créer autant que nécessaire. La présentation visuelle (`wide-offset`/`split`/`text-image`) reste hors D1 (ADR-014) : `src/lib/service-layout.ts` garde les 3 associations `slug → layout` établies et fait tourner cycliquement les mêmes 3 variantes pour toute offre créée au-delà, jamais une donnée éditable depuis l'admin.
+
+**Frontend public réellement connecté.** `services.astro`/`en/services.astro` passent de `prerender = true` à `prerender = false` (même correctif que Travail, Validation Brief 014S) : `ServicesView.astro` lit désormais `listPublishedServices()` en temps réel. Seule la copie de page (titre/intro/« Approche »/CTA final) reste sur le mock — décision volontairement scopée, identique à celle prise pour `content.title/intro/ctaHeadline` de Travail (`services_page_content` existe déjà en D1 mais son édition nécessiterait sa propre UI admin, hors périmètre de ce brief).
+
+**Image publique.** Réutilise intégralement l'architecture créée en Validation Brief 014S : `/media/:id/file` + `resolvePublicMediaObject`, désormais étendu pour reconnaître aussi bien un usage Travail qu'un usage Services (`isMediaUsedByPublicService`, `src/lib/db/services.ts`) — aucun second système média, aucun bucket R2 rendu public.
+
+**UX — pas de jargon anglais dans l'interface.** Les statuts s'affichent « Publié »/« Brouillon » (jamais `published`/`draft` bruts) et « Visible »/« Masqué » pour `is_active`, contrairement à l'écran Travail existant qui affiche encore les valeurs brutes anglaises (non touché — CMS Travail validé, hors périmètre de ce brief).

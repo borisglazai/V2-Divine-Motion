@@ -77,6 +77,15 @@ jobs:
       - name: CMS Travail tests
         run: npm run test:cms:work
 
+      # Services CMS — second real CMS module after Travail.
+      # services-validation.test.ts is pure (no D1). services-endpoints.test.ts
+      # calls the real src/lib/admin/services-actions.ts functions against
+      # their own isolated local D1 via the same Miniflare harness as the
+      # DAL suite (tests/dal/harness.ts) — same independence as CMS
+      # Travail's suite above.
+      - name: CMS Services tests
+        run: npm run test:cms:services
+
       # Media Library + R2 upload foundation (Implementation Brief 014).
       # tests/storage/*.test.ts are pure (no D1/R2/network — key
       # generation, magic-byte/dimension parsing, SigV4 presign
@@ -91,11 +100,12 @@ jobs:
       - name: Media Library tests
         run: npm run test:media
 
-      # Public Travail page + public media route (Validation Brief 014S).
-      # Pure adapter tests (work-gallery-adapter) plus the real
-      # authorization chain (resolvePublicMediaObject, the public
-      # equivalent of media-actions.ts) against their own isolated local
-      # D1 + R2 via tests/dal/harness.ts — same independence as the suites
-      # above.
-      - name: Public work page tests
+      # Public Travail/Services pages + public media route (Validation
+      # Brief 014S, extended by the Services CMS brief). Pure adapter
+      # tests (work-gallery-adapter, service-layout) plus the real
+      # authorization chain (resolvePublicMediaObject, now recognizing
+      # both work_items and services usage) against their own isolated
+      # local D1 + R2 via tests/dal/harness.ts — same independence as the
+      # suites above.
+      - name: Public work/services page tests
         run: npm run test:public

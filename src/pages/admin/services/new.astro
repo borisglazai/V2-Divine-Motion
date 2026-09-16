@@ -1,0 +1,61 @@
+---
+export const prerender = false;
+import AdminLayout from "@/layouts/AdminLayout.astro";
+import ServiceForm from "@/components/admin/ServiceForm.astro";
+import { getDb } from "@/lib/db/client";
+import * as media from "@/lib/db/media";
+import { readFormRedirect } from "@/lib/admin/formRedirect";
+
+const identity = Astro.locals.adminIdentity!;
+const readyMedia = media.sortMediaForPicker(
+  (await media.listMedia(getDb())).filter((m) => m.processing_status === "ready"),
+);
+
+const { errors, values } = readFormRedirect(Astro.url);
+const prefill = {
+  mediaId: values.mediaId ? Number(values.mediaId) : null,
+  slug: values.slug,
+  position: values.position ? Number(values.position) : undefined,
+  ratio: values.ratio,
+  titleFr: values.titleFr,
+  titleEn: values.titleEn,
+  taglineFr: values.taglineFr ?? null,
+  taglineEn: values.taglineEn ?? null,
+  descriptionFr: values.descriptionFr,
+  descriptionEn: values.descriptionEn,
+  imageAltFr: values.imageAltFr,
+  imageAltEn: values.imageAltEn,
+  ctaLabelFr: values.ctaLabelFr,
+  ctaLabelEn: values.ctaLabelEn,
+  isActive: values.isActive === "on",
+};
+---
+
+<AdminLayout activeId="services" title="Nouveau service" identity={identity}>
+  <p class="new-service__note">
+    Créer un service commence toujours par un brouillon — rien n'est jamais publié automatiquement.
+  </p>
+  {errors.form && (
+    <p class="new-service__form-error" role="alert">
+      {errors.form}
+    </p>
+  )}
+  <ServiceForm action="/admin/services/create" submitLabel="Créer le brouillon" media={readyMedia} errors={errors} values={prefill} />
+</AdminLayout>
+
+<style>
+  .new-service__note {
+    color: var(--color-text-secondary);
+    font-size: var(--text-small);
+    margin-bottom: var(--space-6);
+    max-width: 40rem;
+  }
+
+  .new-service__form-error {
+    color: #e08a80;
+    padding: var(--space-4);
+    border: var(--border-width) solid #c2554b;
+    border-radius: var(--radius-md);
+    margin-bottom: var(--space-6);
+  }
+</style>

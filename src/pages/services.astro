@@ -1,5 +1,8 @@
 ---
-export const prerender = true;
+// Services CMS brief: was `prerender = true` (build-time static), which
+// could never reflect a publish/unpublish after deploy — same fix as
+// travail.astro (Validation Brief 014S bug B).
+export const prerender = false;
 import ServicesView from "@/components/pages/ServicesView.astro";
 ---
 
