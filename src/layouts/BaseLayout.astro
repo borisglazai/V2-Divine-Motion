@@ -18,11 +18,26 @@ interface Props {
   transparentHeaderOverHero?: boolean;
   /**
    * Éditeur visuel Phase 1 — set only by an /admin/site/** editor page
-   * (never by a public route) to wrap `<main>` in the one `<form>` the
-   * editor's Enregistrer button submits (see EditorToolbar.astro, whose
-   * script populates this form with the page's edited fields right
-   * before submit). Omitted, `<main>` renders exactly as it always has —
-   * zero markup difference for any public request.
+   * (never by a public route) to render the one `<form>` the editor's
+   * Enregistrer button submits (see EditorToolbar.astro, whose script
+   * populates this form with the page's edited fields right before
+   * submit). Omitted, `<main>` renders exactly as it always has — zero
+   * markup difference for any public request.
+   *
+   * Staging bug fix: this form used to WRAP `<main>`. On Contact, whose
+   * public content has its own real `<form class="contact-form">`
+   * (Implementation Brief 003 — visual only, never actually submits, but
+   * still a real `<form>` element), that nested a `<form>` inside
+   * `#cms-editor-form`. HTML forbids nested forms — the browser's parser
+   * silently drops the inner `<form>` tag and merges its `required`
+   * fields into the OUTER form, so clicking "Enregistrer" triggered the
+   * PUBLIC contact form's native validation instead of saving. None of
+   * the CMS fields (Editable.astro/EditableImage.astro) are native form
+   * controls — they never needed to be physically inside a `<form>` to
+   * submit with it — so the form is now a separate, empty sibling of
+   * `<main>`, and `<main>` instead carries `data-cms-fields-for` pointing
+   * at it (EditorToolbar.astro's script reads fields from there instead
+   * of from inside the form).
    */
   editorFormAction?: string;
 }
@@ -71,11 +86,12 @@ const skipLinkLabel = locale === "fr" ? "Aller au contenu" : "Skip to content";
 
     {
       editorFormAction ? (
-        <form id="cms-editor-form" data-cms-form method="POST" action={editorFormAction}>
-          <main id="main">
+        <>
+          <main id="main" data-cms-fields-for="cms-editor-form">
             <slot />
           </main>
-        </form>
+          <form id="cms-editor-form" data-cms-form method="POST" action={editorFormAction} />
+        </>
       ) : (
         <main id="main">
           <slot />
@@ -94,12 +110,14 @@ const skipLinkLabel = locale === "fr" ? "Aller au contenu" : "Skip to content";
    * Éditeur visuel Phase 2 — mobile toolbar fix (Boris's staging feedback:
    * "hero overlap"). EditorToolbar.astro's fixed bottom bar sits on top of
    * whatever's at the bottom of the viewport; on mobile, Home's hero CTAs
-   * (bottom-aligned, `align-items: flex-end`) land right under it. Only
-   * applies when this IS an editor page (`#cms-editor-form` only renders
-   * then) — zero effect on any public route.
+   * (bottom-aligned, `align-items: flex-end`) land right under it. Targets
+   * `#main` (was `#cms-editor-form` before that stopped wrapping `<main>`
+   * — see this component's `editorFormAction` doc) — `[data-cms-fields-for]`
+   * only renders on an editor page, so this has zero effect on any public
+   * route.
    */
   @media (max-width: 767px) {
-    #cms-editor-form {
+    #main[data-cms-fields-for] {
       padding-bottom: 3.5rem;
     }
   }

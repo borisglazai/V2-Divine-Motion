@@ -257,6 +257,20 @@ const editHref = withParams(currentPath, { lang: locale, mode: undefined });
   // this wires EVERY `[data-cms-form]` on the page the same way, scoping
   // the field sync to that specific form (never `document`-wide) so
   // sibling slot forms never clobber each other on submit.
+  //
+  // Staging bug fix (Contact): #cms-editor-form used to WRAP <main>, so a
+  // form's own fields were always its DOM descendants. On Contact, whose
+  // public content has its own real <form class="contact-form">, that
+  // nested a <form> inside #cms-editor-form — invalid HTML, silently
+  // merged by the browser's parser into the outer form, so clicking
+  // Enregistrer validated the PUBLIC contact form instead of saving.
+  // #cms-editor-form is now a separate, empty sibling of <main>
+  // (BaseLayout.astro), so its fields are found via <main>'s
+  // `data-cms-fields-for="cms-editor-form"` instead of DOM containment —
+  // slot forms are unaffected (GallerySlot.astro's own fields genuinely
+  // are still its DOM descendants, so containment stays the right lookup
+  // for those; a form only needs `fieldsRootFor` when it doesn't itself
+  // contain its fields).
   function hiddenInput(form: HTMLFormElement, name: string): HTMLInputElement {
     let input = form.querySelector<HTMLInputElement>(`input[type="hidden"][name="${CSS.escape(name)}"]`);
     if (!input) {
@@ -268,14 +282,23 @@ const editHref = withParams(currentPath, { lang: locale, mode: undefined });
     return input;
   }
 
+  function fieldsRootFor(form: HTMLFormElement): ParentNode {
+    if (form.id) {
+      const external = document.querySelector(`[data-cms-fields-for="${CSS.escape(form.id)}"]`);
+      if (external) return external;
+    }
+    return form;
+  }
+
   document.querySelectorAll<HTMLFormElement>("form[data-cms-form]").forEach((form) => {
     form.addEventListener("submit", () => {
-      form.querySelectorAll<HTMLElement>("[data-cms-field]").forEach((el) => {
+      const fieldsRoot = fieldsRootFor(form);
+      fieldsRoot.querySelectorAll<HTMLElement>("[data-cms-field]").forEach((el) => {
         const field = el.dataset.cmsField;
         if (!field) return;
         hiddenInput(form, field).value = el.textContent?.trim() ?? "";
       });
-      form.querySelectorAll<HTMLElement>("[data-cms-media-field]").forEach((el) => {
+      fieldsRoot.querySelectorAll<HTMLElement>("[data-cms-media-field]").forEach((el) => {
         const field = el.dataset.cmsMediaField;
         if (!field) return;
         hiddenInput(form, field).value = el.dataset.cmsMediaId ?? "";

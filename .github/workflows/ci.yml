@@ -107,18 +107,21 @@ jobs:
       - name: Éditeur visuel (site editor) tests
         run: npm run test:cms:site-editor
 
-      # Staging bug fix — Travail's gallery-layout picker (EditorToolbar.astro):
-      # a real browser test (Playwright), not `node --test` + `fetch()` like
-      # every suite above, because the bug was entirely in client-side JS/CSS
-      # state a plain HTTP request can't exercise. Runs `astro dev` (bypasses
-      # Cloudflare Access by design in DEV mode — src/lib/auth/guard.ts) and
-      # seeds its own work_page_content row directly against the same default
-      # local D1, since this job's earlier "Migrate local D1" step never
-      # seeds it. See tests/admin/layout-picker.browser.test.ts's header.
-      - name: Install Playwright browser (layout picker test)
+      # Two real-browser regression suites (Playwright, not `node --test` +
+      # `fetch()`): Travail's gallery-layout picker (client-side JS/CSS
+      # state a plain HTTP request can't exercise — see
+      # tests/admin/layout-picker.browser.test.ts) and Contact's
+      # Enregistrer submitting the wrong <form> (an invalid-HTML nested-form
+      # bug only a real browser's own parser/validation reproduces — see
+      # tests/admin/contact-form-isolation.browser.test.ts). Both run
+      # `astro dev` (bypasses Cloudflare Access by design in DEV mode —
+      # src/lib/auth/guard.ts) and seed their own row directly against the
+      # same default local D1, since this job's earlier "Migrate local D1"
+      # step never seeds it.
+      - name: Install Playwright browser (layout picker + contact form tests)
         run: npx playwright install --with-deps chromium
 
-      - name: Travail layout picker browser test
+      - name: Travail layout picker + Contact form isolation browser tests
         run: npm run test:browser
 
       # Media Library + R2 upload foundation (Implementation Brief 014).
