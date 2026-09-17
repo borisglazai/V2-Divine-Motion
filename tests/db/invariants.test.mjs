@@ -58,11 +58,16 @@ describe("schema applies", () => {
     assert.ok(!cols.includes("layout"));
   });
 
-  test("the 9 publication-rights triggers exist (4 from 0001 + 2 media-change guards from 0002 + 3 services guards from 0004, Services CMS brief)", () => {
+  test("the 14 publication-rights triggers exist (4 from 0001 + 2 media-change guards from 0002 + 3 services guards from 0004 + 5 home_content guards from 0005, Éditeur visuel Phase 1)", () => {
     const names = rows(
       "SELECT name FROM sqlite_master WHERE type='trigger' ORDER BY name;",
     ).map((r) => r.name);
     assert.deepEqual(names, [
+      "trg_home_content_rights_gate_about_preview_media_change",
+      "trg_home_content_rights_gate_editorial_media_change",
+      "trg_home_content_rights_gate_en",
+      "trg_home_content_rights_gate_fr",
+      "trg_home_content_rights_gate_hero_media_change",
       "trg_services_rights_gate_en",
       "trg_services_rights_gate_fr",
       "trg_services_rights_gate_media_change",
@@ -488,6 +493,53 @@ describe("publication rights — media change guard on an already-live row (0002
     execD1(`UPDATE testimonials SET photo_media_id=${newRightedId} WHERE id=${id};`);
     const state = rows(`SELECT photo_media_id FROM testimonials WHERE id=${id};`)[0];
     assert.equal(state.photo_media_id, newRightedId);
+  });
+});
+
+// Éditeur visuel Phase 1 — migrations/0005_home_content_rights_gate.sql
+// extends the exact same ADR-011 pattern to home_content, the first time
+// this table has a real public publication path. Only hero_media_id is
+// exercised below (representative) — editorial_media_id/
+// about_preview_media_id get symmetric triggers from the same migration,
+// same SQL shape.
+describe("publication rights — home_content (0005, Éditeur visuel Phase 1)", () => {
+  // home_content is a singleton — at most one status='published' row can
+  // ever exist (enforced by its own partial unique index, proven above by
+  // "page content: at most one published row..."). These tests drive the
+  // trigger through UPDATEs on that ALREADY-EXISTING published row (its
+  // hero_media_id starts out pointing at 'media/home.jpg', rights
+  // unconfirmed) rather than inserting a second published row, which
+  // would itself be rejected by that unique index — not a proof of
+  // anything about this migration's triggers.
+  test("FR publish is blocked while hero_media_id's rights aren't confirmed", () => {
+    const id = rows("SELECT id FROM home_content WHERE status='published';")[0].id;
+    const before = rows(`SELECT fr_status FROM home_content WHERE id=${id};`)[0];
+    assert.notEqual(before.fr_status, "published", "test assumes FR isn't already live on the seeded singleton row");
+
+    const err = expectSqlError(`UPDATE home_content SET fr_status='published' WHERE id=${id};`);
+    assert.match(err, /cannot publish FR — one or more referenced media publication rights not confirmed/);
+  });
+
+  test("changing hero_media_id on a row with a live language to an unrighted media is blocked", () => {
+    const id = rows("SELECT id FROM home_content WHERE status='published';")[0].id;
+
+    execD1(
+      "INSERT INTO media (storage_key, mime_type, size_bytes, uploaded_at, created_at, updated_at, publication_rights_confirmed) VALUES ('media/0005-live.jpg','image/jpeg',1,1,1,1,1);",
+    );
+    const rightedId = rows("SELECT id FROM media WHERE storage_key='media/0005-live.jpg';")[0].id;
+    // Not live yet at this point — swapping media on a non-live row is unguarded.
+    execD1(`UPDATE home_content SET hero_media_id=${rightedId} WHERE id=${id};`);
+    execD1(`UPDATE home_content SET fr_status='published' WHERE id=${id};`);
+
+    execD1(
+      "INSERT INTO media (storage_key, mime_type, size_bytes, uploaded_at, created_at, updated_at) VALUES ('media/0005-swap-unrighted.jpg','image/jpeg',1,1,1,1);",
+    );
+    const unrightedId = rows("SELECT id FROM media WHERE storage_key='media/0005-swap-unrighted.jpg';")[0].id;
+    const err = expectSqlError(`UPDATE home_content SET hero_media_id=${unrightedId} WHERE id=${id};`);
+    assert.match(err, /cannot change hero media on a row with a live language — new media publication rights not confirmed/);
+
+    const state = rows(`SELECT hero_media_id FROM home_content WHERE id=${id};`)[0];
+    assert.equal(state.hero_media_id, rightedId, "the blocked update must not have applied");
   });
 });
 

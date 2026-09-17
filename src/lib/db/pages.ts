@@ -19,23 +19,47 @@ import type {
   AboutStoryParagraphRow,
   ContactContentRow,
   HomeContentRow,
+  Locale,
   Result,
   ServicesApproachStepRow,
   ServicesPageContentRow,
   WorkPageContentRow,
 } from "./types";
 import { fail } from "./types";
+import { getMedia } from "./media";
 import {
   createDraftFromPublished,
   deleteDraft,
   publishDraft,
   replaceDraftChildren,
+  setLanguageStatus,
   updateDraft,
   type ChildTableConfig,
   type PublishableConfig,
 } from "./publish";
 
-function pageRepo<Row extends { id: number }>(config: PublishableConfig) {
+/**
+ * Éditeur visuel Phase 1 — `mediaFields` names the columns (if any) whose
+ * referenced media must have confirmed publication rights before a
+ * language can go live, same ADR-011 pattern as work_items/services/
+ * testimonials. Empty for page tables with no media column
+ * (`services_page_content`, `work_page_content`, `contact_content`).
+ * `home_content` is the only page wired with real triggers so far
+ * (migrations/0005_home_content_rights_gate.sql) — `about_content` has
+ * media columns too but no real publish path yet (see that migration's
+ * header), so it isn't passed here.
+ */
+function pageRepo<Row extends { id: number }>(config: PublishableConfig, mediaFields: readonly string[] = []) {
+  async function mediaRightsConfirmed(db: D1Database, row: Record<string, unknown>): Promise<boolean> {
+    for (const field of mediaFields) {
+      const mediaId = row[field] as number | null | undefined;
+      if (mediaId === null || mediaId === undefined) continue;
+      const media = await getMedia(db, mediaId);
+      if (!media || media.publication_rights_confirmed !== 1) return false;
+    }
+    return true;
+  }
+
   return {
     async getPublished(db: D1Database): Promise<Row | null> {
       const row = await db.prepare(`SELECT * FROM ${config.table} WHERE status = 'published'`).first<Row>();
@@ -53,8 +77,56 @@ function pageRepo<Row extends { id: number }>(config: PublishableConfig) {
     async discardDraft(db: D1Database, draftId: number): Promise<Result<void>> {
       return deleteDraft(db, config.table, draftId);
     },
+    /**
+     * Content merge (draft -> published). Preflight mirrors publishWorkItem/
+     * publishService: only blocks when the merge would make an unrighted
+     * media visible on a row that already has a live language — a page's
+     * very first publish (nothing live yet) is never blocked here.
+     */
     async publish(db: D1Database, draftId: number, updatedBy?: string): Promise<Result<{ publishedId: number }>> {
-      return publishDraft(db, config, draftId, { updatedBy });
+      return publishDraft(db, config, draftId, {
+        updatedBy,
+        preflight: async (draft) => {
+          if (mediaFields.length === 0) return null;
+          const publishedId = draft.draft_of_id as number | null;
+          if (publishedId === null) return null;
+
+          const published = await db
+            .prepare(`SELECT fr_status, en_status FROM ${config.table} WHERE id = ?`)
+            .bind(publishedId)
+            .first<{ fr_status: string; en_status: string }>();
+          if (!published) return null;
+
+          const anyLanguageLive = published.fr_status === "published" || published.en_status === "published";
+          if (!anyLanguageLive) return null;
+
+          if (!(await mediaRightsConfirmed(db, draft))) {
+            return {
+              code: "PUBLICATION_RIGHTS_REQUIRED",
+              message: `${config.table} #${publishedId}: this row has a live language — the draft's media publication rights must be confirmed before publishing`,
+            };
+          }
+          return null;
+        },
+      });
+    },
+    /** The independent FR/EN visibility lever — same pattern as setWorkItemLanguageStatus/setServiceLanguageStatus. */
+    async setLanguageStatus(db: D1Database, locale: Locale, status: "draft" | "published", updatedBy?: string): Promise<Result<void>> {
+      const published = await db.prepare(`SELECT id FROM ${config.table} WHERE status = 'published'`).first<{ id: number }>();
+      if (!published) return fail("NOT_FOUND", `${config.table} has no published row`);
+      return setLanguageStatus(db, config.table, published.id, locale, status, {
+        updatedBy,
+        preflight: async (row) => {
+          if (status !== "published" || mediaFields.length === 0) return null;
+          if (!(await mediaRightsConfirmed(db, row))) {
+            return {
+              code: "PUBLICATION_RIGHTS_REQUIRED",
+              message: `${config.table}: referenced media publication rights are not confirmed`,
+            };
+          }
+          return null;
+        },
+      });
     },
   };
 }
@@ -99,7 +171,24 @@ const HOME_CONFIG: PublishableConfig = {
     "about_preview_visible",
   ],
 };
-export const homeContent = pageRepo<HomeContentRow>(HOME_CONFIG);
+export const homeContent = pageRepo<HomeContentRow>(HOME_CONFIG, ["hero_media_id", "editorial_media_id", "about_preview_media_id"]);
+
+/**
+ * Public media route's authorization check (src/lib/public-media.ts),
+ * home_content's side of the same trust boundary
+ * isMediaUsedByPublicWorkItem/Service/Testimonial enforce elsewhere —
+ * true only if this media is currently referenced by home_content AND
+ * the page is actually live (published row, at least one language live).
+ */
+export async function isMediaUsedByPublicHomeContent(db: D1Database, mediaId: number): Promise<boolean> {
+  const row = await db
+    .prepare(
+      `SELECT 1 FROM home_content WHERE status = 'published' AND (fr_status = 'published' OR en_status = 'published') AND (hero_media_id = ? OR editorial_media_id = ? OR about_preview_media_id = ?) LIMIT 1`,
+    )
+    .bind(mediaId, mediaId, mediaId)
+    .first();
+  return row !== null;
+}
 
 export async function updateHomeContentDraft(
   db: D1Database,

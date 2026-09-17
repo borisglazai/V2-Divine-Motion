@@ -1,20 +1,16 @@
 ---
 /**
- * Éditeur visuel Phase 1 — "Modifier le site" for Accueil. Deliberately
- * does NOT use AdminLayout: Boris's brief requires this to feel like
- * editing the real public site, not a classic admin form
- * (docs/VISUAL_EDITOR_SPEC.md, ADR-002). HomeView (the exact component
- * the public "/" route renders) is used as-is, in "edit"/"preview" mode —
- * see its own doc comment for the mode contract. EditorToolbar is
- * injected through BaseLayout's `admin-chrome` named slot, so nothing
- * here duplicates HomeView's rendering logic.
+ * Éditeur visuel Phase 1 — "Modifier le site" for the Services page-level
+ * copy (title/intro/approach label/final CTA). Same pattern as
+ * ../site.astro (Accueil) — see that file's header comment. Never
+ * touches the individual services items (their own, already-validated
+ * CMS at /admin/services).
  */
 export const prerender = false;
-import HomeView from "@/components/pages/HomeView.astro";
+import ServicesView from "@/components/pages/ServicesView.astro";
 import EditorToolbar from "@/components/admin/EditorToolbar.astro";
 import FlashMessage from "@/components/admin/FlashMessage.astro";
 import * as pages from "@/lib/db/pages";
-import * as media from "@/lib/db/media";
 import { getDb } from "@/lib/db/client";
 import { readFlash } from "@/lib/admin/flash";
 import type { Locale } from "@/i18n/routes";
@@ -25,30 +21,28 @@ const mode = Astro.url.searchParams.get("mode") === "preview" ? "preview" : "edi
 const flash = readFlash(Astro.url);
 
 const db = getDb();
-const draft = await pages.homeContent.getDraft(db);
-const published = await pages.homeContent.getPublished(db);
-const readyMedia = media.sortMediaForPicker((await media.listMedia(db)).filter((m) => m.processing_status === "ready"));
+const draft = await pages.servicesPageContent.getDraft(db);
+const published = await pages.servicesPageContent.getPublished(db);
 ---
 
-<HomeView locale={locale} mode={mode} saveAction="/admin/site/home/save">
+<ServicesView locale={locale} mode={mode} saveAction="/admin/site/services/save">
   <Fragment slot="admin-chrome">
     <div class="cms-flash-overlay">
       <FlashMessage flash={flash} />
     </div>
     <EditorToolbar
-      activePageId="home"
+      activePageId="services"
       locale={locale}
       mode={mode}
       available={true}
-      publishAction="/admin/site/home/publish"
-      languageStatusAction="/admin/site/home/language-status"
+      publishAction="/admin/site/services/publish"
+      languageStatusAction="/admin/site/services/language-status"
       hasDraft={draft !== null}
       frStatus={published?.fr_status}
       enStatus={published?.en_status}
-      media={mode === "edit" ? readyMedia : undefined}
     />
   </Fragment>
-</HomeView>
+</ServicesView>
 
 <style>
   .cms-flash-overlay {

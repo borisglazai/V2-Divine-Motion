@@ -303,3 +303,18 @@ Prouve que le binding `DB` atteint réellement un handler de requête vivant (pa
 Ce fichier reste strictement métadonnées : la composition avec R2 (génération de clé, URL présignée, vérification réelle de l'objet) vit dans `src/lib/storage/` (`keys.ts`, `r2-presign.ts`, `image-inspect.ts`, `env.ts`, `media-storage.ts`), jamais dans `src/lib/db/media.ts` lui-même — voir `docs/MEDIA_ARCHITECTURE.md` pour cette couche.
 
 **Tests.** `tests/db/invariants.test.mjs` (colonne `authorized_at` nullable, `uploaded_at` toujours `NOT NULL`) ; `tests/db/migration-0003-sequencing.test.mjs` (apply frais 0001+0002+0003, ré-application idempotente, upgrade depuis une base n'ayant que 0001+0002 avec vérification du backfill) ; `tests/admin/media-actions.test.ts` (cycle complet JPEG/PNG/24 Mpx, multi-upload, corruption, MIME/taille mensongères, abandon, suppression bloquée si utilisé — contre un vrai D1 + R2 Miniflare).
+
+---
+
+## Éditeur visuel Phase 1 — `home_content` rejoint le garde-fou de droits (`migrations/0005_home_content_rights_gate.sql`)
+
+Avant ce brief, `home_content` (Brief 011) n'avait aucun chemin de publication publique réel — le site public n'en lisait jamais l'image hero. L'éditeur visuel Phase 1 (`/admin/site`, voir `docs/CMS_SPEC.md`/`docs/decisions/ADR-018-visual-editor-architecture.md`) rend `hero_media_id` réellement éditable et affichable publiquement, ce qui active pour la première fois le même trou de sécurité qu'ADR-011 avait déjà fermé pour `work_items`/`services`/`testimonials` (0001/0002) et `services` (0004) : un média sans droits confirmés pourrait devenir visible publiquement via une simple mise à jour de contenu (sans passer par le chemin `publish` déjà gardé).
+
+`0005_home_content_rights_gate.sql` ajoute exactement le même triptyque de triggers que `0004_services_cms.sql`, scopé à `home_content` uniquement :
+
+- `trg_home_content_rights_gate_fr` / `_en` — bloque le passage de `fr_status`/`en_status` à `published` si l'un des 3 médias référencés (`hero_media_id`, `editorial_media_id`, `about_preview_media_id`) n'a pas `publication_rights_confirmed = 1`.
+- `trg_home_content_rights_gate_{hero_media,editorial_media,about_preview_media}_change` — bloque le remplacement d'un de ces médias sur une ligne déjà en ligne (`status='published' AND (fr_status='published' OR en_status='published')`) par un média sans droits confirmés.
+
+`about_content`/`contact_content` ont les mêmes colonnes média mais toujours aucun chemin de publication réel (audit seulement, Phase 1 du brief) — délibérément non couverts par cette migration ; à traiter quand (et si) un chemin de publication réel leur est ouvert.
+
+Côté DAL, `src/lib/db/pages.ts`'s `pageRepo()` gagne un second paramètre `mediaFields: readonly string[]` (même rôle que le préflight applicatif de `publishWorkItem`/`publishService`/`publishTestimonial`) et une méthode `setLanguageStatus()` sur l'objet retourné — `home_content` est le premier appelant à passer des `mediaFields` non vides.

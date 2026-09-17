@@ -1,0 +1,479 @@
+---
+/**
+ * Éditeur visuel Phase 1 — the persistent "chrome" Boris's brief requires
+ * ("toolbar d'édition persistante, navigation entre pages, édition inline
+ * et remplacement d'images directement dans leur emplacement"). Rendered
+ * once per page through BaseLayout's `admin-chrome` named slot (see
+ * HomeView.astro/ServicesView.astro), never inlined into the public
+ * components themselves — this is page CHROME, not page CONTENT, so it
+ * stays a sibling of the real page rather than something Editable.astro/
+ * EditableImage.astro need to know about.
+ *
+ * Three responsibilities, none of which duplicate any public rendering
+ * logic:
+ *   1. Page navigation + FR/EN toggle — plain links, computed from the
+ *      current request URL, so leaving this component never breaks edit
+ *      mode (it's just a normal navigation to another /admin/site/** URL).
+ *   2. Save/Publish/Aperçu/language-status actions — plain <form>s
+ *      (Enregistrer submits the SAME <form id="cms-editor-form"> that
+ *      BaseLayout wraps around <main> — see its `editorFormAction` prop —
+ *      via the HTML `form` button attribute, so this component never
+ *      needs to be an ancestor of the fields it saves).
+ *   3. The one shared media picker <dialog> + the one script that syncs
+ *      contenteditable/image-picker state into the save form right
+ *      before submit — written once here rather than per editable field.
+ */
+import type { Locale } from "@/i18n/routes";
+import type { MediaRow } from "@/lib/db/types";
+import { mediaFileUrl } from "@/lib/admin/media-preview";
+
+export type SiteEditorPageId = "home" | "services" | "travail" | "about" | "contact";
+export type SiteEditorMode = "edit" | "preview";
+export type SiteEditorLanguageStatus = "draft" | "published";
+
+interface Props {
+  activePageId: SiteEditorPageId;
+  locale: Locale;
+  mode: SiteEditorMode;
+  /** False for the 3 pages not yet wired this phase (Travail/À propos/Contact) — nav + quit still work, nothing else does. */
+  available: boolean;
+  publishAction?: string;
+  languageStatusAction?: string;
+  hasDraft?: boolean;
+  frStatus?: SiteEditorLanguageStatus;
+  enStatus?: SiteEditorLanguageStatus;
+  /** Only passed when available && mode === "edit" — the ready media the picker dialog lists. */
+  media?: MediaRow[];
+}
+
+const {
+  activePageId,
+  locale,
+  mode,
+  available,
+  publishAction,
+  languageStatusAction,
+  hasDraft = false,
+  frStatus,
+  enStatus,
+  media,
+} = Astro.props;
+
+const PAGES: { id: SiteEditorPageId; label: string; href: string; available: boolean }[] = [
+  { id: "home", label: "Accueil", href: "/admin/site", available: true },
+  { id: "services", label: "Services", href: "/admin/site/services", available: true },
+  { id: "travail", label: "Travail", href: "/admin/site/travail", available: false },
+  { id: "about", label: "À propos", href: "/admin/site/a-propos", available: false },
+  { id: "contact", label: "Contact", href: "/admin/site/contact", available: false },
+];
+
+function withParams(pathname: string, overrides: Record<string, string | undefined>): string {
+  const url = new URL(pathname, "https://placeholder.local");
+  for (const [key, value] of Object.entries(overrides)) {
+    if (value === undefined) url.searchParams.delete(key);
+    else url.searchParams.set(key, value);
+  }
+  return url.pathname + (url.search ? url.search : "");
+}
+
+const currentPath = Astro.url.pathname;
+const previewHref = withParams(currentPath, { lang: locale, mode: "preview" });
+const editHref = withParams(currentPath, { lang: locale, mode: undefined });
+---
+
+<div class="cms-toolbar" data-cms-toolbar>
+  <span class="cms-toolbar__label">
+    Mode édition{mode === "preview" && " — Aperçu"}
+  </span>
+
+  <nav class="cms-toolbar__pages" aria-label="Pages du site">
+    {
+      PAGES.map((page) => (
+        <a
+          href={withParams(page.href, { lang: locale })}
+          aria-current={page.id === activePageId ? "page" : undefined}
+          class:list={[
+            "cms-toolbar__page-link",
+            { "cms-toolbar__page-link--active": page.id === activePageId },
+          ]}
+        >
+          {page.label}
+          {!page.available && <span class="cms-toolbar__soon"> (bientôt)</span>}
+        </a>
+      ))
+    }
+  </nav>
+
+  <div class="cms-toolbar__lang" role="group" aria-label="Langue">
+    <a href={withParams(currentPath, { lang: "fr", mode: mode === "preview" ? "preview" : undefined })} aria-current={locale === "fr" ? "true" : undefined}>
+      FR
+    </a>
+    <a href={withParams(currentPath, { lang: "en", mode: mode === "preview" ? "preview" : undefined })} aria-current={locale === "en" ? "true" : undefined}>
+      EN
+    </a>
+  </div>
+
+  {
+    available && mode === "edit" && (
+      <div class="cms-toolbar__actions">
+        <button type="submit" form="cms-editor-form" class="cms-toolbar__primary">
+          Enregistrer
+        </button>
+        <a href={previewHref} class="cms-toolbar__ghost">
+          Aperçu
+        </a>
+        {hasDraft && publishAction && (
+          <form method="POST" action={publishAction} class="cms-toolbar__inline-form">
+            <button type="submit" class="cms-toolbar__ghost">
+              Publier
+            </button>
+          </form>
+        )}
+      </div>
+    )
+  }
+
+  {
+    available && mode === "preview" && (
+      <div class="cms-toolbar__actions">
+        <a href={editHref} class="cms-toolbar__ghost">
+          Retour à l'édition
+        </a>
+      </div>
+    )
+  }
+
+  {
+    available && languageStatusAction && (
+      <div class="cms-toolbar__lang-status">
+        <form method="POST" action={languageStatusAction} class="cms-toolbar__inline-form">
+          <input type="hidden" name="locale" value="fr" />
+          <input type="hidden" name="status" value={frStatus === "published" ? "draft" : "published"} />
+          <button type="submit" class="cms-toolbar__ghost cms-toolbar__ghost--small">
+            {frStatus === "published" ? "Dépublier FR" : "Publier FR"}
+          </button>
+        </form>
+        <form method="POST" action={languageStatusAction} class="cms-toolbar__inline-form">
+          <input type="hidden" name="locale" value="en" />
+          <input type="hidden" name="status" value={enStatus === "published" ? "draft" : "published"} />
+          <button type="submit" class="cms-toolbar__ghost cms-toolbar__ghost--small">
+            {enStatus === "published" ? "Dépublier EN" : "Publier EN"}
+          </button>
+        </form>
+      </div>
+    )
+  }
+
+  <a href="/admin" class="cms-toolbar__quit">Quitter le mode édition</a>
+</div>
+
+{
+  available && mode === "edit" && media && (
+    <dialog id="cms-media-picker" class="cms-media-picker">
+      <div class="cms-media-picker__header">
+        <p>Choisir une image</p>
+        <button type="button" class="cms-media-picker__close" data-cms-close-media-picker aria-label="Fermer">
+          ✕
+        </button>
+      </div>
+      <div class="cms-media-picker__grid">
+        {media.map((item) => (
+          <button
+            type="button"
+            class="cms-media-picker__item"
+            data-cms-media-option
+            data-media-id={item.id}
+            data-media-src={mediaFileUrl(item.id)}
+          >
+            <img src={mediaFileUrl(item.id)} alt="" loading="lazy" />
+            {item.publication_rights_confirmed !== 1 && (
+              <span class="cms-media-picker__badge">Droits non confirmés</span>
+            )}
+          </button>
+        ))}
+      </div>
+    </dialog>
+  )
+}
+
+<script>
+  // Éditeur visuel Phase 1 — the one place that turns the shared, mostly-
+  // declarative Editable/EditableImage markup into an actual save request.
+  // Never talks to D1 directly; only ever populates the existing
+  // <form id="cms-editor-form"> (BaseLayout.astro) that a plain server
+  // POST endpoint (src/pages/admin/site/**/save.ts) already knows how to
+  // read as ordinary form fields.
+  const form = document.getElementById("cms-editor-form") as HTMLFormElement | null;
+
+  function hiddenInput(name: string): HTMLInputElement {
+    if (!form) throw new Error("cms-editor-form missing");
+    let input = form.querySelector<HTMLInputElement>(`input[type="hidden"][name="${CSS.escape(name)}"]`);
+    if (!input) {
+      input = document.createElement("input");
+      input.type = "hidden";
+      input.name = name;
+      form.appendChild(input);
+    }
+    return input;
+  }
+
+  if (form) {
+    form.addEventListener("submit", () => {
+      document.querySelectorAll<HTMLElement>("[data-cms-field]").forEach((el) => {
+        const field = el.dataset.cmsField;
+        if (!field) return;
+        hiddenInput(field).value = el.textContent?.trim() ?? "";
+      });
+      document.querySelectorAll<HTMLElement>("[data-cms-media-field]").forEach((el) => {
+        const field = el.dataset.cmsMediaField;
+        if (!field) return;
+        hiddenInput(field).value = el.dataset.cmsMediaId ?? "";
+      });
+    });
+  }
+
+  document.querySelectorAll<HTMLElement>("[data-cms-field]").forEach((el) => {
+    el.addEventListener("input", () => {
+      el.setAttribute("data-cms-dirty", "true");
+    });
+  });
+
+  const dialog = document.getElementById("cms-media-picker") as HTMLDialogElement | null;
+  let targetField: string | null = null;
+
+  document.querySelectorAll<HTMLElement>("[data-cms-open-media-picker]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      targetField = btn.dataset.cmsOpenMediaPicker ?? null;
+      dialog?.showModal();
+    });
+  });
+
+  dialog?.querySelector("[data-cms-close-media-picker]")?.addEventListener("click", () => {
+    dialog.close();
+  });
+
+  dialog?.querySelectorAll<HTMLElement>("[data-cms-media-option]").forEach((option) => {
+    option.addEventListener("click", () => {
+      if (!targetField || !dialog) return;
+      const wrapper = document.querySelector<HTMLElement>(`[data-cms-media-field="${CSS.escape(targetField)}"]`);
+      const mediaId = option.dataset.mediaId;
+      const mediaSrc = option.dataset.mediaSrc;
+      if (wrapper && mediaId && mediaSrc) {
+        wrapper.dataset.cmsMediaId = mediaId;
+        wrapper.setAttribute("data-cms-dirty", "true");
+        const img = wrapper.querySelector("img");
+        if (img) img.src = mediaSrc;
+      }
+      dialog.close();
+    });
+  });
+</script>
+
+<style>
+  .cms-toolbar {
+    position: fixed;
+    inset-inline: 0;
+    bottom: 0;
+    z-index: 999;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-4);
+    padding: var(--space-3) var(--space-6);
+    background: rgba(20, 18, 16, 0.92);
+    backdrop-filter: blur(8px);
+    color: #f2ede6;
+    font-family: var(--font-sans);
+    font-size: var(--text-small);
+  }
+
+  .cms-toolbar__label {
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+  }
+
+  .cms-toolbar__pages {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-3);
+  }
+
+  .cms-toolbar__page-link {
+    color: rgba(242, 237, 230, 0.7);
+    text-decoration: none;
+    padding-block: var(--space-1);
+    border-bottom: 1px solid transparent;
+  }
+
+  .cms-toolbar__page-link:hover,
+  .cms-toolbar__page-link:focus-visible {
+    color: #fff;
+  }
+
+  .cms-toolbar__page-link--active {
+    color: #fff;
+    border-bottom-color: var(--color-accent-warm);
+  }
+
+  .cms-toolbar__soon {
+    opacity: 0.6;
+    font-size: 0.85em;
+  }
+
+  .cms-toolbar__lang {
+    display: flex;
+    gap: var(--space-2);
+  }
+
+  .cms-toolbar__lang a {
+    color: rgba(242, 237, 230, 0.7);
+    text-decoration: none;
+    padding: var(--space-1) var(--space-2);
+    border-radius: var(--radius-sm);
+  }
+
+  .cms-toolbar__lang a[aria-current="true"] {
+    color: #fff;
+    background: rgba(255, 255, 255, 0.12);
+  }
+
+  .cms-toolbar__actions,
+  .cms-toolbar__lang-status {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    margin-inline-start: auto;
+  }
+
+  .cms-toolbar__inline-form {
+    display: inline-block;
+  }
+
+  .cms-toolbar__primary,
+  .cms-toolbar__ghost {
+    font-family: var(--font-sans);
+    font-size: var(--text-small);
+    cursor: pointer;
+    border-radius: var(--radius-sm);
+    padding: var(--space-2) var(--space-4);
+    min-height: 2.5rem;
+  }
+
+  .cms-toolbar__primary {
+    background: var(--color-accent-warm);
+    color: #1a1512;
+    border: none;
+    font-weight: 600;
+  }
+
+  .cms-toolbar__ghost {
+    background: transparent;
+    color: #f2ede6;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+  }
+
+  .cms-toolbar__ghost--small {
+    font-size: 0.8em;
+    padding: var(--space-1) var(--space-3);
+    min-height: 2rem;
+  }
+
+  .cms-toolbar__ghost:hover,
+  .cms-toolbar__ghost:focus-visible,
+  .cms-toolbar__primary:hover,
+  .cms-toolbar__primary:focus-visible {
+    opacity: 0.85;
+  }
+
+  .cms-toolbar__quit {
+    color: rgba(242, 237, 230, 0.6);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    white-space: nowrap;
+  }
+
+  .cms-toolbar__quit:hover,
+  .cms-toolbar__quit:focus-visible {
+    color: #fff;
+  }
+
+  /* MEDIA PICKER DIALOG */
+  .cms-media-picker {
+    width: min(48rem, 92vw);
+    max-height: 80vh;
+    border: none;
+    border-radius: var(--radius-md);
+    padding: 0;
+    color: var(--color-text-primary);
+  }
+
+  .cms-media-picker::backdrop {
+    background: rgba(0, 0, 0, 0.6);
+  }
+
+  .cms-media-picker__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--space-4) var(--space-6);
+    border-bottom: var(--border-width) solid var(--color-border);
+  }
+
+  .cms-media-picker__header p {
+    font-family: var(--font-serif);
+    margin: 0;
+  }
+
+  .cms-media-picker__close {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: var(--text-body);
+    color: var(--color-text-secondary);
+  }
+
+  .cms-media-picker__grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(8rem, 1fr));
+    gap: var(--space-3);
+    padding: var(--space-6);
+    overflow-y: auto;
+    max-height: calc(80vh - 4rem);
+  }
+
+  .cms-media-picker__item {
+    position: relative;
+    padding: 0;
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+    cursor: pointer;
+    background: none;
+    aspect-ratio: 1;
+  }
+
+  .cms-media-picker__item:hover,
+  .cms-media-picker__item:focus-visible {
+    border-color: var(--color-accent-warm);
+  }
+
+  .cms-media-picker__item img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .cms-media-picker__badge {
+    position: absolute;
+    inset-inline: 0;
+    bottom: 0;
+    background: rgba(20, 18, 16, 0.8);
+    color: #f2ede6;
+    font-size: 0.65rem;
+    padding: 2px var(--space-2);
+  }
+</style>

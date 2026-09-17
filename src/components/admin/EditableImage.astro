@@ -1,0 +1,87 @@
+---
+/**
+ * Éditeur visuel Phase 1 — the image counterpart to Editable.astro. Same
+ * rule: in public rendering (`editable=false`) this is nothing but
+ * `<ImageFrame>` — zero extra markup. In editor rendering it adds a
+ * "Changer l'image" affordance that opens the shared media picker dialog
+ * rendered once by EditorToolbar.astro (see its `<dialog id="cms-media-
+ * picker">` and script) — never a second upload path, never a second
+ * media system; strictly a different way to pick from the same
+ * médiathèque already validated in Brief 014.
+ */
+import ImageFrame from "@/components/ImageFrame.astro";
+
+interface Props {
+  field: string;
+  src: string;
+  alt: string;
+  mediaId: number;
+  ratio?: string;
+  focalX?: number;
+  focalY?: number;
+  /** Passed straight through to ImageFrame — see its own doc (hero-style fill layouts). */
+  fill?: boolean;
+  loading?: "lazy" | "eager";
+  editable?: boolean;
+  class?: string;
+}
+
+const { field, src, alt, mediaId, ratio, focalX, focalY, fill = false, loading, editable = false, class: className } = Astro.props;
+---
+
+{
+  editable ? (
+    <div
+      class:list={["cms-editable-image", { "cms-editable-image--fill": fill }]}
+      data-cms-media-field={field}
+      data-cms-media-id={mediaId}
+    >
+      <ImageFrame src={src} alt={alt} ratio={ratio} focalX={focalX} focalY={focalY} fill={fill} loading={loading} class={className} />
+      <button type="button" class="cms-editable-image__button" data-cms-open-media-picker={field}>
+        Changer l'image
+      </button>
+    </div>
+  ) : (
+    <ImageFrame src={src} alt={alt} ratio={ratio} focalX={focalX} focalY={focalY} fill={fill} loading={loading} class={className} />
+  )
+}
+
+<style>
+  .cms-editable-image {
+    position: relative;
+  }
+
+  /* Mirrors ImageFrame's own .image-frame--fill: without this the inner
+     fill ImageFrame's `position: absolute; inset: 0` would resolve
+     against this wrapper, which has no intrinsic height of its own. */
+  .cms-editable-image--fill {
+    position: absolute;
+    inset: 0;
+  }
+
+  .cms-editable-image__button {
+    position: absolute;
+    bottom: var(--space-3);
+    right: var(--space-3);
+    z-index: 2;
+    background: rgba(20, 18, 16, 0.72);
+    color: #fff;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    border-radius: var(--radius-sm);
+    padding: var(--space-2) var(--space-4);
+    font-size: var(--text-small);
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 0.15s ease;
+  }
+
+  .cms-editable-image:hover .cms-editable-image__button,
+  .cms-editable-image:focus-within .cms-editable-image__button {
+    opacity: 1;
+  }
+
+  .cms-editable-image[data-cms-dirty="true"] {
+    outline: 2px solid var(--color-accent-warm);
+    outline-offset: 4px;
+  }
+</style>

@@ -7,26 +7,48 @@ import Text from "@/components/Text.astro";
 import EditorialLink from "@/components/EditorialLink.astro";
 import ImageFrame from "@/components/ImageFrame.astro";
 import ScrollReveal from "@/components/ScrollReveal.astro";
+import Editable from "@/components/admin/Editable.astro";
 import { getPath, type Locale } from "@/i18n/routes";
 import { servicesMock } from "@/data/mock/services";
 import { t } from "@/i18n/ui";
 import { getDb } from "@/lib/db/client";
 import { listPublishedServices, type ServiceWithFeatures } from "@/lib/db/services";
+import * as pages from "@/lib/db/pages";
 import { publicMediaFileUrl } from "@/lib/public-media";
 import { resolveServiceLayout } from "@/lib/service-layout";
+import type { ServicesPageContentRow } from "@/lib/db/types";
 
 interface Props {
   locale: Locale;
+  /** Éditeur visuel Phase 1 — see HomeView.astro's own doc for the exact contract. */
+  mode?: "public" | "edit" | "preview";
+  saveAction?: string;
 }
 
-const { locale } = Astro.props;
+const { locale, mode = "public", saveAction } = Astro.props;
+const editable = mode === "edit";
 const copy = t(locale);
-// Page-level copy (title/intro/"Approche"/CTA final) stays on the mock —
-// same deliberate, scoped decision as WorkView.astro's content.title/
-// intro/ctaHeadline (services_page_content exists in D1 but editing it
-// needs its own admin UI, out of scope for the Services CMS brief). Only
-// the curated services array below reads real D1 state.
+// Page-level copy (title/intro/"Approche"/CTA final): mock is the
+// fallback, `services_page_content` (Éditeur visuel Phase 1) overrides it
+// once a language is actually published — same "never public before
+// explicit publish" rule as HomeView.astro. The curated services array
+// below is unrelated, untouched real D1 state (Services CMS brief).
 const content = servicesMock[locale];
+
+let servicesPageRow: ServicesPageContentRow | null = null;
+try {
+  const db = getDb();
+  servicesPageRow =
+    mode === "public" ? await pages.servicesPageContent.getPublished(db) : ((await pages.servicesPageContent.getDraft(db)) ?? (await pages.servicesPageContent.getPublished(db)));
+} catch (err) {
+  console.error("ServicesView: services_page_content D1 read failed", err instanceof Error ? err.message : err);
+}
+const langLive = servicesPageRow !== null && (mode !== "public" || (locale === "fr" ? servicesPageRow.fr_status === "published" : servicesPageRow.en_status === "published"));
+
+const pageTitle = langLive ? (locale === "fr" ? servicesPageRow!.title_fr : servicesPageRow!.title_en) : content.title;
+const pageIntro = langLive ? (locale === "fr" ? servicesPageRow!.intro_fr : servicesPageRow!.intro_en) : content.intro;
+const approachLabel = langLive ? (locale === "fr" ? servicesPageRow!.approach_label_fr : servicesPageRow!.approach_label_en) : content.approachLabel;
+const ctaHeadline = langLive ? (locale === "fr" ? servicesPageRow!.cta_headline_fr : servicesPageRow!.cta_headline_en) : content.finalCta.headline;
 
 let publishedServices: ServiceWithFeatures[] = [];
 try {
@@ -54,15 +76,22 @@ const localizedServices = publishedServices.map((service, index) => ({
 <BaseLayout
   locale={locale}
   pageId="services"
-  title={content.title}
-  description={content.intro}
+  title={pageTitle}
+  description={pageIntro}
+  editorFormAction={editable ? saveAction : undefined}
 >
   <Section spacing="tight">
     <Container>
       <div data-reveal>
-        <Heading level={1} size="display">{content.title}</Heading>
+        <Heading level={1} size="display">
+          <Editable field={locale === "fr" ? "titleFr" : "titleEn"} locale={locale} editable={editable}>
+            {pageTitle}
+          </Editable>
+        </Heading>
         <Text as="p" size="lg" tone="secondary" class="services-intro__text">
-          {content.intro}
+          <Editable field={locale === "fr" ? "introFr" : "introEn"} locale={locale} editable={editable} multiline>
+            {pageIntro}
+          </Editable>
         </Text>
       </div>
     </Container>
@@ -122,10 +151,14 @@ const localizedServices = publishedServices.map((service, index) => ({
     ))
   }
 
-  <Section aria-label={content.approachLabel}>
+  <Section aria-label={approachLabel}>
     <Container>
       <div data-reveal>
-        <Heading level={2} size="eyebrow">{content.approachLabel}</Heading>
+        <Heading level={2} size="eyebrow">
+          <Editable field={locale === "fr" ? "approachLabelFr" : "approachLabelEn"} locale={locale} editable={editable}>
+            {approachLabel}
+          </Editable>
+        </Heading>
         <div class="approach">
           {
             content.approachSteps.map((step) => (
@@ -150,13 +183,19 @@ const localizedServices = publishedServices.map((service, index) => ({
   <Section background="secondary" aria-label="Contact">
     <Container>
       <div data-reveal>
-        <Heading level={2} size="display">{content.finalCta.headline}</Heading>
+        <Heading level={2} size="display">
+          <Editable field={locale === "fr" ? "ctaHeadlineFr" : "ctaHeadlineEn"} locale={locale} editable={editable} multiline>
+            {ctaHeadline}
+          </Editable>
+        </Heading>
         <EditorialLink href={getPath("contact", locale)} class="services-cta__link">
           {copy.cta.contactUs}
         </EditorialLink>
       </div>
     </Container>
   </Section>
+
+  <slot name="admin-chrome" slot="admin-chrome" />
 </BaseLayout>
 
 <ScrollReveal />

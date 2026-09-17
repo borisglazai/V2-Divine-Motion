@@ -1,0 +1,56 @@
+---
+/**
+ * Éditeur visuel Phase 1 — Travail is intentionally NOT wired for editing
+ * yet (ADR-014: the gallery's visual composition is frontend-computed,
+ * never stored in D1 — turning it into editable "slots" needs its own
+ * design pass, out of scope here). This placeholder exists so
+ * "navigation entre pages tout en restant en mode édition" is real for
+ * all 5 target pages even where content isn't editable yet — same
+ * EditorToolbar component as the wired pages, `available={false}`.
+ */
+export const prerender = false;
+import "@/styles/global.css";
+import EditorToolbar from "@/components/admin/EditorToolbar.astro";
+import type { Locale } from "@/i18n/routes";
+
+const localeParam = Astro.url.searchParams.get("lang");
+const locale: Locale = localeParam === "en" ? "en" : "fr";
+---
+
+<!doctype html>
+<html lang={locale}>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Travail — Édition — Divine Motion</title>
+    <meta name="robots" content="noindex, nofollow" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  </head>
+  <body>
+    <main class="cms-soon">
+      <p>
+        {locale === "fr"
+          ? "L'édition visuelle de Travail arrive dans une prochaine itération — la composition de la galerie reste pour l'instant pilotée par le design/code (ADR-014)."
+          : "Visual editing for Travail is coming in a future iteration — the gallery composition is still code/design-driven for now (ADR-014)."}
+      </p>
+    </main>
+    <EditorToolbar activePageId="travail" locale={locale} mode="edit" available={false} />
+  </body>
+</html>
+
+<style>
+  .cms-soon {
+    min-height: 80vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: var(--space-8);
+    text-align: center;
+  }
+
+  .cms-soon p {
+    max-width: 32rem;
+    font-family: var(--font-sans);
+    color: var(--color-text-secondary);
+  }
+</style>

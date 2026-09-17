@@ -92,6 +92,17 @@ jobs:
       - name: CMS Testimonials tests
         run: npm run test:cms:testimonials
 
+      # Éditeur visuel Phase 1 — the fourth CMS-adjacent module: singleton
+      # page-content editors (home_content, services_page_content) behind
+      # /admin/site/**. site-editor-validation.test.ts is pure (no D1).
+      # site-editor-endpoints.test.ts calls the real
+      # src/lib/admin/home-editor-actions.ts / services-page-editor-actions.ts
+      # functions against their own isolated local D1 via the same
+      # Miniflare harness (tests/dal/harness.ts) — same independence as
+      # every CMS suite above.
+      - name: Éditeur visuel (site editor) tests
+        run: npm run test:cms:site-editor
+
       # Media Library + R2 upload foundation (Implementation Brief 014).
       # tests/storage/*.test.ts are pure (no D1/R2/network — key
       # generation, magic-byte/dimension parsing, SigV4 presign

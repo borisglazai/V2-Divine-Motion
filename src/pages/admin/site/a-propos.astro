@@ -1,0 +1,52 @@
+---
+/**
+ * Éditeur visuel Phase 1 — À propos is audit-only this phase (Boris's
+ * brief: "pas d'implémentation requise", only knowing what's still
+ * static/mock). Same placeholder pattern as travail.astro.
+ */
+export const prerender = false;
+import "@/styles/global.css";
+import EditorToolbar from "@/components/admin/EditorToolbar.astro";
+import type { Locale } from "@/i18n/routes";
+
+const localeParam = Astro.url.searchParams.get("lang");
+const locale: Locale = localeParam === "en" ? "en" : "fr";
+---
+
+<!doctype html>
+<html lang={locale}>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>À propos — Édition — Divine Motion</title>
+    <meta name="robots" content="noindex, nofollow" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  </head>
+  <body>
+    <main class="cms-soon">
+      <p>
+        {locale === "fr"
+          ? "L'édition visuelle d'À propos arrive dans une prochaine itération."
+          : "Visual editing for À propos is coming in a future iteration."}
+      </p>
+    </main>
+    <EditorToolbar activePageId="about" locale={locale} mode="edit" available={false} />
+  </body>
+</html>
+
+<style>
+  .cms-soon {
+    min-height: 80vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: var(--space-8);
+    text-align: center;
+  }
+
+  .cms-soon p {
+    max-width: 32rem;
+    font-family: var(--font-sans);
+    color: var(--color-text-secondary);
+  }
+</style>

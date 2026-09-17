@@ -194,6 +194,10 @@ test("/admin with a malformed Cf-Access-Jwt-Assertion header: still blocked, no 
 test("every placeholder admin route is protected the same way, not just /admin itself", async () => {
   const routes = [
     "/admin/site",
+    "/admin/site/services",
+    "/admin/site/travail",
+    "/admin/site/a-propos",
+    "/admin/site/contact",
     "/admin/work",
     "/admin/media",
     "/admin/media/1",
@@ -271,6 +275,32 @@ for (const route of MEDIA_MUTATION_ROUTES) {
       method: "POST",
       headers,
       body: route.body,
+      redirect: "manual",
+    });
+    assert.ok([401, 403].includes(response.status), `expected 401/403, got ${response.status}`);
+    assert.equal(response.headers.get("cache-control"), "no-store");
+  });
+}
+
+// Éditeur visuel Phase 1 — same belt-and-suspenders proof for the new
+// /admin/site/** mutation routes. Same reasoning as MEDIA_MUTATION_ROUTES
+// above: middleware blocks these structurally, requireAdminMutation()
+// itself is unit-tested once in tests/auth/mutation.test.ts.
+const SITE_EDITOR_MUTATION_ROUTES = [
+  "/admin/site/home/save",
+  "/admin/site/home/publish",
+  "/admin/site/home/language-status",
+  "/admin/site/services/save",
+  "/admin/site/services/publish",
+  "/admin/site/services/language-status",
+];
+
+for (const path of SITE_EDITOR_MUTATION_ROUTES) {
+  test(`site editor mutation route (POST ${path}) with no JWT is blocked before reaching any DAL logic`, async () => {
+    const response = await fetch(`${BASE_URL}${path}`, {
+      method: "POST",
+      headers: { Origin: BASE_URL, "Content-Type": "application/x-www-form-urlencoded" },
+      body: "locale=fr&status=published",
       redirect: "manual",
     });
     assert.ok([401, 403].includes(response.status), `expected 401/403, got ${response.status}`);

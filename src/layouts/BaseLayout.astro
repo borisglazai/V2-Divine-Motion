@@ -16,6 +16,15 @@ interface Props {
    * other page omits this and keeps the header's current solid style.
    */
   transparentHeaderOverHero?: boolean;
+  /**
+   * Éditeur visuel Phase 1 — set only by an /admin/site/** editor page
+   * (never by a public route) to wrap `<main>` in the one `<form>` the
+   * editor's Enregistrer button submits (see EditorToolbar.astro, whose
+   * script populates this form with the page's edited fields right
+   * before submit). Omitted, `<main>` renders exactly as it always has —
+   * zero markup difference for any public request.
+   */
+  editorFormAction?: string;
 }
 
 const {
@@ -24,6 +33,7 @@ const {
   title,
   description,
   transparentHeaderOverHero = false,
+  editorFormAction,
 } = Astro.props;
 const copy = t(locale);
 const paths = getAllPathsFor(pageId);
@@ -59,10 +69,22 @@ const skipLinkLabel = locale === "fr" ? "Aller au contenu" : "Skip to content";
 
     <Header locale={locale} pageId={pageId} transparentOverHero={transparentHeaderOverHero} />
 
-    <main id="main">
-      <slot />
-    </main>
+    {
+      editorFormAction ? (
+        <form id="cms-editor-form" method="POST" action={editorFormAction}>
+          <main id="main">
+            <slot />
+          </main>
+        </form>
+      ) : (
+        <main id="main">
+          <slot />
+        </main>
+      )
+    }
 
     <Footer locale={locale} />
+
+    <slot name="admin-chrome" />
   </body>
 </html>

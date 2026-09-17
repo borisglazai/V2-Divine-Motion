@@ -1,0 +1,63 @@
+---
+/**
+ * Éditeur visuel Phase 1 — the one wrapper every editable text field in a
+ * shared public/editor component goes through (ADR-002: "L'admin et le
+ * site public partagent les mêmes composants"). In public rendering
+ * (`editable=false`, the default) this renders NOTHING but its own
+ * slot — zero extra markup, zero risk of any editor affordance ever
+ * reaching a real visitor's HTML. In editor rendering it becomes a
+ * `contenteditable` element the client-side editor script
+ * (EditorToolbar.astro) reads from on save — never itself talks to D1.
+ */
+interface Props {
+  field: string;
+  locale: "fr" | "en";
+  editable?: boolean;
+  /** Use a block element (paragraphs) instead of inline (short titles/labels). */
+  multiline?: boolean;
+}
+
+const { field, locale, editable = false, multiline = false } = Astro.props;
+const Tag = multiline ? "div" : "span";
+---
+
+{
+  editable ? (
+    <Tag
+      class="cms-editable"
+      data-cms-field={field}
+      data-cms-locale={locale}
+      contenteditable="true"
+      role="textbox"
+      aria-label={`Modifier ce texte (${field})`}
+    >
+      <slot />
+    </Tag>
+  ) : (
+    <slot />
+  )
+}
+
+<style>
+  .cms-editable {
+    outline: 1px dashed transparent;
+    outline-offset: 6px;
+    border-radius: 2px;
+    cursor: text;
+    transition: outline-color 0.15s ease, background-color 0.15s ease;
+  }
+
+  .cms-editable:hover {
+    outline-color: color-mix(in srgb, var(--color-accent-warm) 55%, transparent);
+  }
+
+  .cms-editable:focus {
+    outline: 1px solid var(--color-accent-warm);
+    background: color-mix(in srgb, var(--color-accent-warm) 8%, transparent);
+  }
+
+  .cms-editable[data-cms-dirty="true"] {
+    outline-color: var(--color-accent-warm);
+    outline-style: solid;
+  }
+</style>

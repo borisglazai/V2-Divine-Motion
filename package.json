@@ -25,9 +25,10 @@
     "test:cms:work": "node --import tsx --test tests/admin/work-validation.test.ts tests/admin/work-endpoints.test.ts tests/admin/media-preview.test.ts",
     "test:cms:services": "node --import tsx --test tests/admin/services-validation.test.ts tests/admin/services-endpoints.test.ts",
     "test:cms:testimonials": "node --import tsx --test tests/admin/testimonials-validation.test.ts tests/admin/testimonials-endpoints.test.ts",
+    "test:cms:site-editor": "node --import tsx --test tests/admin/site-editor-validation.test.ts tests/admin/site-editor-endpoints.test.ts",
     "test:storage": "node --import tsx --test tests/storage/keys.test.ts tests/storage/image-inspect.test.ts tests/storage/r2-presign.test.ts",
     "test:media": "node --import tsx --test tests/admin/media-actions.test.ts",
-    "test:public": "node --import tsx --test tests/public/work-gallery-adapter.test.ts tests/public/public-media.test.ts tests/public/work-view.test.ts tests/public/service-layout.test.ts tests/public/services-view.test.ts tests/public/testimonials-view.test.ts"
+    "test:public": "node --import tsx --test tests/public/work-gallery-adapter.test.ts tests/public/public-media.test.ts tests/public/work-view.test.ts tests/public/service-layout.test.ts tests/public/services-view.test.ts tests/public/testimonials-view.test.ts tests/public/site-editor-view.test.ts"
   },
   "dependencies": {
     "@astrojs/cloudflare": "^14.3.1",

@@ -7,25 +7,83 @@ import Text from "@/components/Text.astro";
 import EditorialLink from "@/components/EditorialLink.astro";
 import ImageFrame from "@/components/ImageFrame.astro";
 import ScrollReveal from "@/components/ScrollReveal.astro";
+import Editable from "@/components/admin/Editable.astro";
+import EditableImage from "@/components/admin/EditableImage.astro";
 import { getPath, type Locale } from "@/i18n/routes";
 import { homeMock } from "@/data/mock/home";
 import { placeholderPhotos } from "@/lib/placeholder-photos";
 import { t } from "@/i18n/ui";
 import { getDb } from "@/lib/db/client";
 import { listPublishedTestimonials } from "@/lib/db/testimonials";
+import { getMedia } from "@/lib/db/media";
+import * as pages from "@/lib/db/pages";
 import { publicMediaFileUrl } from "@/lib/public-media";
-import type { TestimonialRow } from "@/lib/db/types";
+import { mediaFileUrl } from "@/lib/admin/media-preview";
+import type { HomeContentRow, TestimonialRow } from "@/lib/db/types";
 
 interface Props {
   locale: Locale;
+  /**
+   * Éditeur visuel Phase 1 — "public" (default) is exactly today's
+   * rendering, byte-for-byte. "edit"/"preview" are only ever passed by
+   * src/pages/admin/site.astro (Access-gated) and read draft-or-published
+   * `home_content` instead of the public/language-gated view — see
+   * docs/CMS_SPEC.md "Éditeur visuel Phase 1" for the exact field scope
+   * (hero headline/subline/media, brand statement, final CTA headline —
+   * every other section here stays on the mock, unchanged).
+   */
+  mode?: "public" | "edit" | "preview";
+  /** Only meaningful in edit mode — forwarded to BaseLayout so its Enregistrer button has a target. */
+  saveAction?: string;
 }
 
-const { locale } = Astro.props;
+const { locale, mode = "public", saveAction } = Astro.props;
+const editable = mode === "edit";
 const copy = t(locale);
 const content = homeMock[locale];
 
 const title = locale === "fr" ? "Accueil" : "Home";
 const description = content.hero.subline;
+
+// Éditeur visuel Phase 1 — home_content read. Public mode only trusts it
+// once the row exists AND the requested language is actually published
+// (ADR-013's fr_status/en_status lever) — until an admin explicitly
+// publishes, this stays byte-identical to the pre-existing mock-only
+// rendering. Edit/preview modes always read draft-or-published, since an
+// admin must see their own unpublished work.
+let homeRow: HomeContentRow | null = null;
+try {
+  const db = getDb();
+  homeRow = mode === "public" ? await pages.homeContent.getPublished(db) : ((await pages.homeContent.getDraft(db)) ?? (await pages.homeContent.getPublished(db)));
+} catch (err) {
+  console.error("HomeView: home_content D1 read failed", err instanceof Error ? err.message : err);
+}
+
+const langLive = homeRow !== null && (mode !== "public" || (locale === "fr" ? homeRow.fr_status === "published" : homeRow.en_status === "published"));
+
+const heroHeadline = langLive ? (locale === "fr" ? homeRow!.hero_headline_fr : homeRow!.hero_headline_en) : content.hero.headline;
+const heroSubline = langLive ? (locale === "fr" ? homeRow!.hero_subline_fr : homeRow!.hero_subline_en) : content.hero.subline;
+const brandStatement = langLive ? (locale === "fr" ? homeRow!.brand_statement_fr : homeRow!.brand_statement_en) : content.brandStatement;
+const finalCtaHeadline = langLive ? (locale === "fr" ? homeRow!.final_cta_headline_fr : homeRow!.final_cta_headline_en) : content.finalCta.headline;
+
+let heroImageSrc: string = placeholderPhotos.a;
+let heroImageAlt = content.hero.imageAlt;
+let heroFocalX: number | undefined;
+let heroFocalY: number | undefined;
+const heroMediaId = homeRow?.hero_media_id ?? 0;
+if (langLive && homeRow) {
+  try {
+    const media = await getMedia(getDb(), homeRow.hero_media_id);
+    if (media) {
+      heroImageSrc = mode === "public" ? publicMediaFileUrl(homeRow.hero_media_id) : mediaFileUrl(homeRow.hero_media_id);
+      heroImageAlt = locale === "fr" ? homeRow.hero_image_alt_fr : homeRow.hero_image_alt_en;
+      heroFocalX = media.focal_x;
+      heroFocalY = media.focal_y;
+    }
+  } catch (err) {
+    console.error("HomeView: hero media D1 read failed", err instanceof Error ? err.message : err);
+  }
+}
 
 // Témoignages CMS: the only Home section backed by real D1 (every other
 // section here is still homeMock — out of scope for this brief, same
@@ -48,15 +106,34 @@ try {
   title={title}
   description={description}
   transparentHeaderOverHero
+  editorFormAction={editable ? saveAction : undefined}
 >
   <!-- HERO -->
   <section class="hero">
-    <ImageFrame src={placeholderPhotos.a} alt={content.hero.imageAlt} fill loading="eager" />
+    <EditableImage
+      field="heroMediaId"
+      src={heroImageSrc}
+      alt={heroImageAlt}
+      mediaId={heroMediaId}
+      focalX={heroFocalX}
+      focalY={heroFocalY}
+      editable={editable}
+      fill
+      loading="eager"
+    />
     <div class="hero__scrim" aria-hidden="true"></div>
     <Container class="hero__content">
       <div data-reveal>
-        <Heading level={1} size="display-xl">{content.hero.headline}</Heading>
-        <Text as="p" size="lg" class="hero__subline">{content.hero.subline}</Text>
+        <Heading level={1} size="display-xl">
+          <Editable field={locale === "fr" ? "heroHeadlineFr" : "heroHeadlineEn"} locale={locale} editable={editable}>
+            {heroHeadline}
+          </Editable>
+        </Heading>
+        <Text as="p" size="lg" class="hero__subline">
+          <Editable field={locale === "fr" ? "heroSublineFr" : "heroSublineEn"} locale={locale} editable={editable} multiline>
+            {heroSubline}
+          </Editable>
+        </Text>
         <div class="hero__ctas">
           <EditorialLink href={getPath("work", locale)}>
             {content.workPreview.linkLabel}
@@ -100,7 +177,11 @@ try {
   <Section background="secondary" aria-label="Brand statement">
     <Container>
       <div data-reveal>
-        <Heading level={2} size="display">{content.brandStatement}</Heading>
+        <Heading level={2} size="display">
+          <Editable field={locale === "fr" ? "brandStatementFr" : "brandStatementEn"} locale={locale} editable={editable} multiline>
+            {brandStatement}
+          </Editable>
+        </Heading>
       </div>
     </Container>
   </Section>
@@ -224,13 +305,19 @@ try {
   <Section background="secondary" aria-label="Contact">
     <Container>
       <div data-reveal>
-        <Heading level={2} size="display">{content.finalCta.headline}</Heading>
+        <Heading level={2} size="display">
+          <Editable field={locale === "fr" ? "finalCtaHeadlineFr" : "finalCtaHeadlineEn"} locale={locale} editable={editable} multiline>
+            {finalCtaHeadline}
+          </Editable>
+        </Heading>
         <EditorialLink href={getPath("contact", locale)} class="final-cta__link">
           {copy.cta.contactUs}
         </EditorialLink>
       </div>
     </Container>
   </Section>
+
+  <slot name="admin-chrome" slot="admin-chrome" />
 </BaseLayout>
 
 <ScrollReveal />
