@@ -37,8 +37,37 @@ const { field, src, alt, mediaId, ratio, focalX, focalY, fill = false, loading, 
       data-cms-media-id={mediaId}
     >
       <ImageFrame src={src} alt={alt} ratio={ratio} focalX={focalX} focalY={focalY} fill={fill} loading={loading} class={className} />
-      <button type="button" class="cms-editable-image__button" data-cms-open-media-picker={field}>
-        Changer l'image
+      {/*
+        The trigger covers the ENTIRE image, not a small corner target —
+        UX fix (staging validation): the previous corner-button-only
+        affordance was too easy to miss on desktop (had to find the exact
+        hover zone) and effectively unreachable on touch (no hover at
+        all). A single full-surface <button> gives one obvious, always-
+        reachable action: click/tap anywhere on the image, or Tab to it
+        and press Enter/Space. It's a sibling of <ImageFrame>, positioned
+        on top — not a wrapper around it — so the image's own `alt` stays
+        independently announced rather than swallowed into the button's
+        accessible name; `aria-label` gives the button its own.
+      */}
+      <button
+        type="button"
+        class="cms-editable-image__trigger"
+        data-cms-open-media-picker={field}
+        aria-label={`Changer l'image (${field})`}
+      >
+        <span class="cms-editable-image__scrim" aria-hidden="true" />
+        <span class="cms-editable-image__label">
+          <svg viewBox="0 0 20 20" fill="none" aria-hidden="true" class="cms-editable-image__icon">
+            <path
+              d="M3 14.5V16a1 1 0 0 0 1 1h1.5l8.4-8.4a1 1 0 0 0 0-1.4l-1.1-1.1a1 1 0 0 0-1.4 0L3 14.5Z"
+              stroke="currentColor"
+              stroke-width="1.3"
+              stroke-linejoin="round"
+            />
+            <path d="M11.5 4.5 15.5 8.5" stroke="currentColor" stroke-width="1.3" />
+          </svg>
+          Changer l'image
+        </span>
       </button>
     </div>
   ) : (
@@ -59,25 +88,87 @@ const { field, src, alt, mediaId, ratio, focalX, focalY, fill = false, loading, 
     inset: 0;
   }
 
-  .cms-editable-image__button {
+  .cms-editable-image__trigger {
     position: absolute;
-    bottom: var(--space-3);
-    right: var(--space-3);
+    inset: 0;
     z-index: 2;
-    background: rgba(20, 18, 16, 0.72);
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* Subtle at rest, never a "heavy CMS" wash — brightens on hover/focus so the whole surface reads as one obvious action. */
+  .cms-editable-image__scrim {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(to top, rgba(20, 18, 16, 0.32) 0%, rgba(20, 18, 16, 0) 45%);
+    opacity: 0;
+    transition: opacity 0.15s ease;
+  }
+
+  .cms-editable-image__label {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    margin-bottom: var(--space-3);
+    background: rgba(20, 18, 16, 0.78);
     color: #fff;
     border: 1px solid rgba(255, 255, 255, 0.3);
     border-radius: var(--radius-sm);
     padding: var(--space-2) var(--space-4);
     font-size: var(--text-small);
-    cursor: pointer;
+    line-height: 1;
     opacity: 0;
-    transition: opacity 0.15s ease;
+    transform: translateY(4px);
+    transition: opacity 0.15s ease, transform 0.15s ease;
   }
 
-  .cms-editable-image:hover .cms-editable-image__button,
-  .cms-editable-image:focus-within .cms-editable-image__button {
+  .cms-editable-image__icon {
+    width: 1em;
+    height: 1em;
+    flex-shrink: 0;
+  }
+
+  /* Desktop: the whole image is the hover target (not a corner), so the overlay + label appear the instant the pointer reaches the image anywhere. */
+  .cms-editable-image__trigger:hover .cms-editable-image__scrim,
+  .cms-editable-image__trigger:focus-visible .cms-editable-image__scrim {
     opacity: 1;
+  }
+
+  .cms-editable-image__trigger:hover .cms-editable-image__label,
+  .cms-editable-image__trigger:focus-visible .cms-editable-image__label {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  .cms-editable-image__trigger:focus-visible {
+    outline: 2px solid var(--color-accent-warm);
+    outline-offset: -2px;
+  }
+
+  /* Touch/coarse-pointer devices have no hover to reveal the affordance —
+     keep a softly-visible, always-on scrim + label instead of a two-step
+     "tap to reveal, tap again to open" dance (a single tap already opens
+     the picker, since the whole surface is one <button>). */
+  @media (hover: none) {
+    .cms-editable-image__scrim {
+      opacity: 1;
+      background: linear-gradient(to top, rgba(20, 18, 16, 0.4) 0%, rgba(20, 18, 16, 0) 55%);
+    }
+
+    .cms-editable-image__label {
+      opacity: 0.92;
+      transform: translateY(0);
+    }
   }
 
   .cms-editable-image[data-cms-dirty="true"] {
