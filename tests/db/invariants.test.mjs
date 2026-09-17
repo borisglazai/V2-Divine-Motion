@@ -58,11 +58,16 @@ describe("schema applies", () => {
     assert.ok(!cols.includes("layout"));
   });
 
-  test("the 14 publication-rights triggers exist (4 from 0001 + 2 media-change guards from 0002 + 3 services guards from 0004 + 5 home_content guards from 0005, Éditeur visuel Phase 1)", () => {
+  test("the 19 publication-rights triggers exist (4 from 0001 + 2 media-change guards from 0002 + 3 services guards from 0004 + 5 home_content guards from 0005 + 5 about_content guards from 0006, Éditeur visuel Phase 2)", () => {
     const names = rows(
       "SELECT name FROM sqlite_master WHERE type='trigger' ORDER BY name;",
     ).map((r) => r.name);
     assert.deepEqual(names, [
+      "trg_about_content_rights_gate_breathing_media_change",
+      "trg_about_content_rights_gate_en",
+      "trg_about_content_rights_gate_fr",
+      "trg_about_content_rights_gate_hero_media_change",
+      "trg_about_content_rights_gate_human_note_media_change",
       "trg_home_content_rights_gate_about_preview_media_change",
       "trg_home_content_rights_gate_editorial_media_change",
       "trg_home_content_rights_gate_en",
