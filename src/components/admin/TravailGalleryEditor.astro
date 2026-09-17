@@ -1,0 +1,90 @@
+---
+/**
+ * Éditeur visuel Phase 2 — renders one AdminGallerySlot (from
+ * src/lib/work-gallery-adapter.ts's buildAdminGallerySlots) per composition
+ * slot, each containing its GallerySlot.astro entries (one per image the
+ * slot's shape expects). An APPROXIMATION of the public composition's
+ * proportions (full/centered/large/offset/duo/trio — same vocabulary as
+ * src/components/WorkGallery.astro), not a byte-identical reuse of that
+ * component's own scoped styles (Astro scopes <style> per-component, so
+ * WorkGallery.astro's CSS classes don't apply to markup rendered here) —
+ * close enough for the admin to recognize which composition slot they're
+ * editing, not pixel parity with the public page (a known Phase 2 limit,
+ * see the final report).
+ */
+import type { Locale } from "@/i18n/routes";
+import type { AdminGallerySlot } from "@/lib/work-gallery-adapter";
+import type { AdminGalleryItemMeta } from "@/lib/db/work";
+import GallerySlot from "@/components/admin/GallerySlot.astro";
+
+interface Props {
+  slots: AdminGallerySlot[];
+  meta: Map<number, AdminGalleryItemMeta>;
+  locale: Locale;
+  redirectTo: string;
+}
+
+const { slots, meta, locale, redirectTo } = Astro.props;
+---
+
+<div class="travail-gallery-editor">
+  {
+    slots.map((slot) => {
+      const modifier = slot.shape.block === "offset" ? `offset offset--${slot.shape.side}` : slot.shape.block;
+      return (
+        <div class:list={["travail-gallery-editor__block", `travail-gallery-editor__block--${modifier}`]}>
+          {slot.entries.map((entry) => (
+            <div class="travail-gallery-editor__item">
+              <GallerySlot entry={entry} meta={entry.item ? (meta.get(entry.item.id) ?? null) : null} locale={locale} redirectTo={redirectTo} />
+            </div>
+          ))}
+        </div>
+      );
+    })
+  }
+</div>
+
+<style>
+  .travail-gallery-editor {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-8);
+  }
+
+  .travail-gallery-editor__block {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+    width: 100%;
+  }
+
+  .travail-gallery-editor__block--full,
+  .travail-gallery-editor__block--large {
+    max-width: 68rem;
+    margin-inline: auto;
+  }
+
+  .travail-gallery-editor__block--centered {
+    max-width: 44rem;
+    margin-inline: auto;
+  }
+
+  .travail-gallery-editor__block--offset {
+    max-width: 52rem;
+  }
+
+  .travail-gallery-editor__block--offset.offset--right {
+    margin-inline-start: auto;
+  }
+
+  .travail-gallery-editor__block--duo,
+  .travail-gallery-editor__block--trio {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+
+  .travail-gallery-editor__block--duo .travail-gallery-editor__item,
+  .travail-gallery-editor__block--trio .travail-gallery-editor__item {
+    flex: 1 1 16rem;
+  }
+</style>

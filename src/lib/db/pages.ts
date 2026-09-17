@@ -204,7 +204,7 @@ export async function updateHomeContentDraft(
 // ---------------------------------------------------------------------------
 const WORK_PAGE_CONFIG: PublishableConfig = {
   table: "work_page_content",
-  copyColumns: ["title_fr", "title_en", "intro_fr", "intro_en", "cta_headline_fr", "cta_headline_en"],
+  copyColumns: ["title_fr", "title_en", "intro_fr", "intro_en", "cta_headline_fr", "cta_headline_en", "gallery_layout"],
 };
 export const workPageContent = pageRepo<WorkPageContentRow>(WORK_PAGE_CONFIG);
 
@@ -326,7 +326,16 @@ const ABOUT_CONFIG: PublishableConfig = {
   ],
   children: [ABOUT_STORY_PARAGRAPHS_CHILD, ABOUT_APPROACH_ITEMS_CHILD],
 };
-const aboutRepo = pageRepo<AboutContentRow>(ABOUT_CONFIG);
+/**
+ * Éditeur visuel Phase 2 — `about_content` gets its first real publish
+ * path (`/admin/site/a-propos`), so it now needs the same rights-gate
+ * preflight home_content/services already have (migrations/0006). All 3
+ * media columns are listed even though this phase's admin UI only wires
+ * `hero_media_id` for editing — breathing_media_id/human_note_media_id
+ * stay whatever the seed set them to, but the preflight still protects
+ * them, same reasoning as home_content's editorial/about-preview fields.
+ */
+const aboutRepo = pageRepo<AboutContentRow>(ABOUT_CONFIG, ["hero_media_id", "breathing_media_id", "human_note_media_id"]);
 
 export const aboutContent = {
   ...aboutRepo,
@@ -345,6 +354,23 @@ export const aboutContent = {
     return results;
   },
 };
+
+/**
+ * Public media route's authorization check (src/lib/public-media.ts),
+ * about_content's side of the same trust boundary
+ * isMediaUsedByPublicWorkItem/Service/Testimonial/HomeContent enforce
+ * elsewhere — true only if this media is currently referenced by
+ * about_content AND the page is actually live.
+ */
+export async function isMediaUsedByPublicAboutContent(db: D1Database, mediaId: number): Promise<boolean> {
+  const row = await db
+    .prepare(
+      `SELECT 1 FROM about_content WHERE status = 'published' AND (fr_status = 'published' OR en_status = 'published') AND (hero_media_id = ? OR breathing_media_id = ? OR human_note_media_id = ?) LIMIT 1`,
+    )
+    .bind(mediaId, mediaId, mediaId)
+    .first();
+  return row !== null;
+}
 
 export async function updateAboutContentDraft(
   db: D1Database,

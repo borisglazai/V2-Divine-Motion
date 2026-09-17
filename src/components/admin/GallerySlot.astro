@@ -1,0 +1,244 @@
+---
+/**
+ * Éditeur visuel Phase 2 — the "template-driven editorial gallery
+ * builder" Boris's brief centers on: one slot of the chosen composition
+ * (src/lib/work-gallery-layouts.ts), rendered admin-side in EXACTLY the
+ * shape it'll have publicly (same ratio/orientation), with direct
+ * in-place editing:
+ *
+ *  - OCCUPIED (entry.item set): "Changer l'image" (reuses EditableImage —
+ *    same shared media picker <dialog> as every other editable image on
+ *    this site) + an editable caption for the current locale, saved via
+ *    its own small <form> pointed at /admin/site/travail/slot/save —
+ *    never a redirect to /admin/work for this simple case (Boris's
+ *    brief). "Publier"/FR/EN toggles appear once a draft is open, same
+ *    rule as /admin/work/[id] just condensed.
+ *  - EMPTY (entry.item null): keeps its expected ratio/orientation
+ *    visible (e.g. "16:9 — Paysage") with an "Ajouter une photo" action
+ *    that collects alt FR/EN — REQUIRED, native browser validation,
+ *    never pre-filled/invented (Boris's explicit instruction) — before
+ *    creating the new work_item at this exact position.
+ *
+ * Never reachable by a public visitor: only rendered from
+ * src/pages/admin/site/travail.astro, itself behind src/middleware.ts's
+ * Cloudflare Access gate — same trust boundary as every other
+ * src/components/admin/** component.
+ */
+import type { Locale } from "@/i18n/routes";
+import type { AdminSlotEntry } from "@/lib/work-gallery-adapter";
+import type { AdminGalleryItemMeta } from "@/lib/db/work";
+import { mediaFileUrl } from "@/lib/admin/media-preview";
+import EditableImage from "@/components/admin/EditableImage.astro";
+import Editable from "@/components/admin/Editable.astro";
+
+interface Props {
+  entry: AdminSlotEntry;
+  meta: AdminGalleryItemMeta | null;
+  locale: Locale;
+  redirectTo: string;
+}
+
+const { entry, meta, locale, redirectTo } = Astro.props;
+const ratioStyle = `aspect-ratio: ${entry.expectedShape.ratio.replace("/", " / ")};`;
+---
+
+{
+  entry.item ? (
+    <div class="gallery-slot gallery-slot--occupied">
+      <form method="POST" action="/admin/site/travail/slot/save" data-cms-form class="gallery-slot__media-form">
+        <input type="hidden" name="workItemId" value={entry.item.id} />
+        <input type="hidden" name="redirect" value={redirectTo} />
+        <EditableImage
+          field="mediaId"
+          src={mediaFileUrl(entry.item.media_id)}
+          alt=""
+          mediaId={entry.item.media_id}
+          ratio={entry.expectedShape.ratio}
+          editable
+        />
+        <label class="gallery-slot__caption-label">
+          Légende ({locale.toUpperCase()})
+          <Editable field="caption" locale={locale} editable>
+            {(locale === "fr" ? entry.item.caption_fr : entry.item.caption_en) ?? ""}
+          </Editable>
+        </label>
+        <button type="submit" class="gallery-slot__save-btn">
+          Enregistrer l'emplacement
+        </button>
+      </form>
+
+      {meta?.hasDraft && meta.draftId && (
+        <form method="POST" action="/admin/site/travail/slot/publish" class="gallery-slot__inline-form">
+          <input type="hidden" name="draftId" value={meta.draftId} />
+          <input type="hidden" name="redirect" value={redirectTo} />
+          <button type="submit" class="gallery-slot__ghost-btn">
+            Publier cet élément
+          </button>
+        </form>
+      )}
+
+      {!meta?.isNewDraft && meta?.frStatus !== null && meta?.frStatus !== undefined && (
+        <form method="POST" action="/admin/site/travail/slot/language-status" class="gallery-slot__inline-form">
+          <input type="hidden" name="publishedId" value={entry.item.id} />
+          <input type="hidden" name="locale" value="fr" />
+          <input type="hidden" name="status" value={meta.frStatus === "published" ? "draft" : "published"} />
+          <input type="hidden" name="redirect" value={redirectTo} />
+          <button type="submit" class="gallery-slot__ghost-btn gallery-slot__ghost-btn--small">
+            {meta.frStatus === "published" ? "Dépublier FR" : "Publier FR"}
+          </button>
+        </form>
+      )}
+      {!meta?.isNewDraft && meta?.enStatus !== null && meta?.enStatus !== undefined && (
+        <form method="POST" action="/admin/site/travail/slot/language-status" class="gallery-slot__inline-form">
+          <input type="hidden" name="publishedId" value={entry.item.id} />
+          <input type="hidden" name="locale" value="en" />
+          <input type="hidden" name="status" value={meta.enStatus === "published" ? "draft" : "published"} />
+          <input type="hidden" name="redirect" value={redirectTo} />
+          <button type="submit" class="gallery-slot__ghost-btn gallery-slot__ghost-btn--small">
+            {meta.enStatus === "published" ? "Dépublier EN" : "Publier EN"}
+          </button>
+        </form>
+      )}
+    </div>
+  ) : (
+    <div class="gallery-slot gallery-slot--empty">
+      <form method="POST" action="/admin/site/travail/slot/create" data-cms-form class="gallery-slot__create-form">
+        <input type="hidden" name="position" value={entry.position} />
+        <input type="hidden" name="ratio" value={entry.expectedShape.ratio} />
+        <input type="hidden" name="redirect" value={redirectTo} />
+
+        <div class="gallery-slot__placeholder" style={ratioStyle} data-cms-media-field="mediaId" data-cms-media-id="">
+          <span class="gallery-slot__placeholder-ratio">{entry.expectedShape.ratioLabel}</span>
+          <button type="button" class="gallery-slot__pick-btn" data-cms-open-media-picker="mediaId">
+            Ajouter une photo
+          </button>
+          <span class="gallery-slot__placeholder-selected">Photo sélectionnée</span>
+        </div>
+
+        <label class="gallery-slot__alt-label">
+          Texte alternatif FR (obligatoire)
+          <input type="text" name="altFr" required />
+        </label>
+        <label class="gallery-slot__alt-label">
+          Texte alternatif EN (obligatoire)
+          <input type="text" name="altEn" required />
+        </label>
+        <label class="gallery-slot__caption-input-label">
+          Légende FR (optionnelle)
+          <input type="text" name="captionFr" />
+        </label>
+        <label class="gallery-slot__caption-input-label">
+          Légende EN (optionnelle)
+          <input type="text" name="captionEn" />
+        </label>
+
+        <button type="submit" class="gallery-slot__save-btn">
+          Créer l'élément (brouillon)
+        </button>
+      </form>
+    </div>
+  )
+}
+
+<style>
+  .gallery-slot {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    padding: var(--space-3);
+    border: 1px dashed rgba(255, 255, 255, 0.15);
+    border-radius: var(--radius-sm);
+  }
+
+  .gallery-slot--occupied {
+    border-style: solid;
+    border-color: var(--color-border);
+  }
+
+  .gallery-slot__caption-label,
+  .gallery-slot__alt-label,
+  .gallery-slot__caption-input-label {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    font-size: var(--text-small);
+    color: var(--color-text-secondary);
+  }
+
+  .gallery-slot__alt-label input,
+  .gallery-slot__caption-input-label input {
+    font-family: var(--font-sans);
+    font-size: var(--text-small);
+    padding: var(--space-2);
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-sm);
+    background: var(--color-bg-primary);
+    color: var(--color-text-primary);
+  }
+
+  .gallery-slot__save-btn,
+  .gallery-slot__ghost-btn {
+    font-family: var(--font-sans);
+    font-size: var(--text-small);
+    cursor: pointer;
+    border-radius: var(--radius-sm);
+    padding: var(--space-2) var(--space-3);
+    min-height: 2.25rem;
+    border: var(--border-width) solid var(--color-border);
+    background: transparent;
+    color: var(--color-text-primary);
+  }
+
+  .gallery-slot__ghost-btn--small {
+    font-size: 0.8em;
+    padding: var(--space-1) var(--space-2);
+    min-height: 2rem;
+  }
+
+  .gallery-slot__inline-form {
+    display: inline-block;
+  }
+
+  .gallery-slot__placeholder {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-2);
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px dashed rgba(255, 255, 255, 0.25);
+    border-radius: var(--radius-sm);
+    color: var(--color-text-secondary);
+    text-align: center;
+  }
+
+  .gallery-slot__placeholder-ratio {
+    font-size: var(--text-small);
+  }
+
+  .gallery-slot__pick-btn {
+    font-family: var(--font-sans);
+    font-size: var(--text-small);
+    cursor: pointer;
+    border-radius: var(--radius-sm);
+    padding: var(--space-2) var(--space-4);
+    border: 1px solid rgba(255, 255, 255, 0.4);
+    background: transparent;
+    color: inherit;
+  }
+
+  .gallery-slot__placeholder-selected {
+    display: none;
+    font-size: var(--text-small);
+    color: var(--color-accent-warm);
+  }
+
+  .gallery-slot__placeholder[data-cms-dirty="true"] .gallery-slot__placeholder-selected {
+    display: inline;
+  }
+
+  .gallery-slot__placeholder[data-cms-dirty="true"] .gallery-slot__pick-btn {
+    display: none;
+  }
+</style>

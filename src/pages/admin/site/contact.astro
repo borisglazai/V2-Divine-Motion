@@ -1,52 +1,59 @@
 ---
 /**
- * Éditeur visuel Phase 1 — Contact is audit-only this phase (Boris's
- * brief: "pas d'implémentation requise"). Same placeholder pattern as
- * travail.astro/a-propos.astro.
+ * Éditeur visuel Phase 2 — "Modifier le site" for Contact (`contact_content`
+ * editorial fields only — the contact form itself is untouched). Same
+ * pattern as ../services.astro.
  */
 export const prerender = false;
-import "@/styles/global.css";
+import ContactView from "@/components/pages/ContactView.astro";
 import EditorToolbar from "@/components/admin/EditorToolbar.astro";
+import FlashMessage from "@/components/admin/FlashMessage.astro";
+import * as pages from "@/lib/db/pages";
+import { getDb } from "@/lib/db/client";
+import { readFlash } from "@/lib/admin/flash";
 import type { Locale } from "@/i18n/routes";
 
 const localeParam = Astro.url.searchParams.get("lang");
 const locale: Locale = localeParam === "en" ? "en" : "fr";
+const mode = Astro.url.searchParams.get("mode") === "preview" ? "preview" : "edit";
+const flash = readFlash(Astro.url);
+
+const db = getDb();
+const draft = await pages.contactContent.getDraft(db);
+const published = await pages.contactContent.getPublished(db);
 ---
 
-<!doctype html>
-<html lang={locale}>
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Contact — Édition — Divine Motion</title>
-    <meta name="robots" content="noindex, nofollow" />
-    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-  </head>
-  <body>
-    <main class="cms-soon">
-      <p>
-        {locale === "fr"
-          ? "L'édition visuelle de Contact arrive dans une prochaine itération."
-          : "Visual editing for Contact is coming in a future iteration."}
-      </p>
-    </main>
-    <EditorToolbar activePageId="contact" locale={locale} mode="edit" available={false} />
-  </body>
-</html>
+<ContactView locale={locale} mode={mode} saveAction="/admin/site/contact/save">
+  <Fragment slot="admin-chrome">
+    <div class="cms-flash-overlay">
+      <FlashMessage flash={flash} />
+    </div>
+    <EditorToolbar
+      activePageId="contact"
+      locale={locale}
+      mode={mode}
+      available={true}
+      publishAction="/admin/site/contact/publish"
+      languageStatusAction="/admin/site/contact/language-status"
+      hasDraft={draft !== null}
+      frStatus={published?.fr_status}
+      enStatus={published?.en_status}
+    />
+  </Fragment>
+</ContactView>
 
 <style>
-  .cms-soon {
-    min-height: 80vh;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: var(--space-8);
-    text-align: center;
+  .cms-flash-overlay {
+    position: fixed;
+    top: var(--space-4);
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 1000;
+    width: min(32rem, 90vw);
   }
 
-  .cms-soon p {
-    max-width: 32rem;
-    font-family: var(--font-sans);
-    color: var(--color-text-secondary);
+  .cms-flash-overlay :global(.flash-message) {
+    background: var(--color-bg-primary);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
   }
 </style>

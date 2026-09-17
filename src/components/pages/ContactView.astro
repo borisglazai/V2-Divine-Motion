@@ -5,35 +5,68 @@ import Section from "@/components/Section.astro";
 import Heading from "@/components/Heading.astro";
 import Text from "@/components/Text.astro";
 import PrimaryButton from "@/components/PrimaryButton.astro";
+import Editable from "@/components/admin/Editable.astro";
 import ScrollReveal from "@/components/ScrollReveal.astro";
 import { getPath, type Locale } from "@/i18n/routes";
 import { contactMock } from "@/data/mock/contact";
 import { t } from "@/i18n/ui";
+import { getDb } from "@/lib/db/client";
+import * as pages from "@/lib/db/pages";
+import type { ContactContentRow } from "@/lib/db/types";
 
 interface Props {
   locale: Locale;
+  /**
+   * Éditeur visuel Phase 2 — same 3-mode convention as the other 4 pages.
+   * Editorial content only (Boris's brief: hero title/intro, details
+   * label, closing note) — the contact form itself (already visual-only,
+   * no real submit) is never touched by this phase.
+   */
+  mode?: "public" | "edit" | "preview";
+  saveAction?: string;
 }
 
-const { locale } = Astro.props;
+const { locale, mode = "public", saveAction } = Astro.props;
+const editable = mode === "edit";
 const copy = t(locale);
 const form = copy.contactForm;
 const content = contactMock[locale];
+
+let contactRow: ContactContentRow | null = null;
+try {
+  const db = getDb();
+  contactRow = mode === "public" ? await pages.contactContent.getPublished(db) : ((await pages.contactContent.getDraft(db)) ?? (await pages.contactContent.getPublished(db)));
+} catch (err) {
+  console.error("ContactView: contact_content D1 read failed", err instanceof Error ? err.message : err);
+}
+
+const langLive = contactRow !== null && (mode !== "public" || (locale === "fr" ? contactRow.fr_status === "published" : contactRow.en_status === "published"));
+
+const heroTitle = langLive ? (locale === "fr" ? contactRow!.hero_title_fr : contactRow!.hero_title_en) : content.hero.title;
+const heroSubtext = langLive ? (locale === "fr" ? contactRow!.hero_subtext_fr : contactRow!.hero_subtext_en) : content.hero.subtext;
+const detailsLabel = langLive ? (locale === "fr" ? contactRow!.details_label_fr : contactRow!.details_label_en) : content.details.label;
+const closingNote = langLive ? (locale === "fr" ? contactRow!.closing_note_fr : contactRow!.closing_note_en) : content.closingNote;
 ---
 
 <BaseLayout
   locale={locale}
   pageId="contact"
-  title={content.hero.title}
-  description={content.hero.subtext}
+  title={heroTitle}
+  description={heroSubtext}
+  editorFormAction={editable ? saveAction : undefined}
 >
   <Section spacing="tight">
     <Container class="contact-hero">
       <div data-reveal>
         <Heading level={1} size="display" id="contact-heading">
-          {content.hero.title}
+          <Editable field={locale === "fr" ? "heroTitleFr" : "heroTitleEn"} locale={locale} editable={editable}>
+            {heroTitle}
+          </Editable>
         </Heading>
         <Text as="p" size="lg" tone="secondary" class="contact-hero__subtext">
-          {content.hero.subtext}
+          <Editable field={locale === "fr" ? "heroSubtextFr" : "heroSubtextEn"} locale={locale} editable={editable} multiline>
+            {heroSubtext}
+          </Editable>
         </Text>
       </div>
     </Container>
@@ -102,10 +135,14 @@ const content = contactMock[locale];
     </Container>
   </Section>
 
-  <Section aria-label={content.details.label}>
+  <Section aria-label={detailsLabel}>
     <Container class="contact-details">
       <div data-reveal>
-        <Heading level={2} size="eyebrow">{content.details.label}</Heading>
+        <Heading level={2} size="eyebrow">
+          <Editable field={locale === "fr" ? "detailsLabelFr" : "detailsLabelEn"} locale={locale} editable={editable}>
+            {detailsLabel}
+          </Editable>
+        </Heading>
         <ul class="contact-details__list">
           {content.details.items.map((item) => (
             <li>
@@ -122,11 +159,15 @@ const content = contactMock[locale];
     <Container>
       <div data-reveal>
         <Heading level={2} size="h2" class="contact-closing">
-          {content.closingNote}
+          <Editable field={locale === "fr" ? "closingNoteFr" : "closingNoteEn"} locale={locale} editable={editable} multiline>
+            {closingNote}
+          </Editable>
         </Heading>
       </div>
     </Container>
   </Section>
+
+  <slot name="admin-chrome" slot="admin-chrome" />
 </BaseLayout>
 
 <ScrollReveal />

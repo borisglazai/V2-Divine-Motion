@@ -71,7 +71,7 @@ const skipLinkLabel = locale === "fr" ? "Aller au contenu" : "Skip to content";
 
     {
       editorFormAction ? (
-        <form id="cms-editor-form" method="POST" action={editorFormAction}>
+        <form id="cms-editor-form" data-cms-form method="POST" action={editorFormAction}>
           <main id="main">
             <slot />
           </main>
@@ -88,3 +88,19 @@ const skipLinkLabel = locale === "fr" ? "Aller au contenu" : "Skip to content";
     <slot name="admin-chrome" />
   </body>
 </html>
+
+<style>
+  /*
+   * Éditeur visuel Phase 2 — mobile toolbar fix (Boris's staging feedback:
+   * "hero overlap"). EditorToolbar.astro's fixed bottom bar sits on top of
+   * whatever's at the bottom of the viewport; on mobile, Home's hero CTAs
+   * (bottom-aligned, `align-items: flex-end`) land right under it. Only
+   * applies when this IS an editor page (`#cms-editor-form` only renders
+   * then) — zero effect on any public route.
+   */
+  @media (max-width: 767px) {
+    #cms-editor-form {
+      padding-bottom: 3.5rem;
+    }
+  }
+</style>

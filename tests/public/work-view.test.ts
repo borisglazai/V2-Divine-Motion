@@ -38,7 +38,7 @@ after(async () => {
 /** Exactly what src/components/pages/WorkView.astro now does for a given locale. */
 async function renderPublicWork(locale: "fr" | "en") {
   const items = await work.listPublishedWorkItems(db, locale);
-  return buildGalleryFromWorkItems(items, locale);
+  return buildGalleryFromWorkItems(items, locale, "editorial");
 }
 
 describe("Validation Brief 014S bug B — publish -> real content appears publicly", () => {

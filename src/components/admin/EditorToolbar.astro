@@ -24,8 +24,9 @@
  *      before submit — written once here rather than per editable field.
  */
 import type { Locale } from "@/i18n/routes";
-import type { MediaRow } from "@/lib/db/types";
+import type { MediaRow, WorkGalleryLayout } from "@/lib/db/types";
 import { mediaFileUrl } from "@/lib/admin/media-preview";
+import { GALLERY_LAYOUTS } from "@/lib/work-gallery-layouts";
 
 export type SiteEditorPageId = "home" | "services" | "travail" | "about" | "contact";
 export type SiteEditorMode = "edit" | "preview";
@@ -35,7 +36,7 @@ interface Props {
   activePageId: SiteEditorPageId;
   locale: Locale;
   mode: SiteEditorMode;
-  /** False for the 3 pages not yet wired this phase (Travail/À propos/Contact) — nav + quit still work, nothing else does. */
+  /** False for the 2 pages not yet wired this phase (À propos/Contact) — nav + quit still work, nothing else does. */
   available: boolean;
   publishAction?: string;
   languageStatusAction?: string;
@@ -44,6 +45,15 @@ interface Props {
   enStatus?: SiteEditorLanguageStatus;
   /** Only passed when available && mode === "edit" — the ready media the picker dialog lists. */
   media?: MediaRow[];
+  /**
+   * Éditeur visuel Phase 2, Travail only — the current `work_page_content.
+   * gallery_layout`. Boris's brief §6: "une composition doit être
+   * représentée visuellement avant sélection" — rendered as 3 visual
+   * cards (not a bare <select>), submitted as part of the same
+   * #cms-editor-form as title/intro/cta (via the `form` attribute, same
+   * trick the toolbar's own Enregistrer button already uses).
+   */
+  galleryLayout?: WorkGalleryLayout;
 }
 
 const {
@@ -57,14 +67,15 @@ const {
   frStatus,
   enStatus,
   media,
+  galleryLayout,
 } = Astro.props;
 
 const PAGES: { id: SiteEditorPageId; label: string; href: string; available: boolean }[] = [
   { id: "home", label: "Accueil", href: "/admin/site", available: true },
   { id: "services", label: "Services", href: "/admin/site/services", available: true },
-  { id: "travail", label: "Travail", href: "/admin/site/travail", available: false },
-  { id: "about", label: "À propos", href: "/admin/site/a-propos", available: false },
-  { id: "contact", label: "Contact", href: "/admin/site/contact", available: false },
+  { id: "travail", label: "Travail", href: "/admin/site/travail", available: true },
+  { id: "about", label: "À propos", href: "/admin/site/a-propos", available: true },
+  { id: "contact", label: "Contact", href: "/admin/site/contact", available: true },
 ];
 
 function withParams(pathname: string, overrides: Record<string, string | undefined>): string {
@@ -86,6 +97,18 @@ const editHref = withParams(currentPath, { lang: locale, mode: undefined });
     Mode édition{mode === "preview" && " — Aperçu"}
   </span>
 
+  {/*
+    Éditeur visuel Phase 2 — mobile toolbar fix (Boris's staging feedback:
+    "toolbar trop haute"). Desktop is unaffected (hidden via CSS,
+    min-width: 768px); on mobile this collapses everything below into a
+    scrollable panel, shown only once tapped, so the always-visible bar
+    stays a single compact row instead of wrapping into several.
+  */}
+  <button type="button" class="cms-toolbar__toggle" data-cms-toolbar-toggle aria-expanded="false" aria-controls="cms-toolbar-body">
+    Menu
+  </button>
+
+  <div class="cms-toolbar__body" id="cms-toolbar-body">
   <nav class="cms-toolbar__pages" aria-label="Pages du site">
     {
       PAGES.map((page) => (
@@ -165,7 +188,22 @@ const editHref = withParams(currentPath, { lang: locale, mode: undefined });
   }
 
   <a href="/admin" class="cms-toolbar__quit">Quitter le mode édition</a>
+  </div>
 </div>
+
+{
+  activePageId === "travail" && available && mode === "edit" && galleryLayout && (
+    <div class="cms-layout-picker" role="radiogroup" aria-label="Composition de la galerie Travail">
+      {Object.values(GALLERY_LAYOUTS).map((layout) => (
+        <label class:list={["cms-layout-picker__option", { "cms-layout-picker__option--active": layout.id === galleryLayout }]}>
+          <input type="radio" name="galleryLayout" value={layout.id} checked={layout.id === galleryLayout} form="cms-editor-form" />
+          <span class="cms-layout-picker__label">{layout.label}</span>
+          <span class="cms-layout-picker__description">{layout.description}</span>
+        </label>
+      ))}
+    </div>
+  )
+}
 
 {
   available && mode === "edit" && media && (
@@ -197,16 +235,29 @@ const editHref = withParams(currentPath, { lang: locale, mode: undefined });
 }
 
 <script>
-  // Éditeur visuel Phase 1 — the one place that turns the shared, mostly-
-  // declarative Editable/EditableImage markup into an actual save request.
-  // Never talks to D1 directly; only ever populates the existing
-  // <form id="cms-editor-form"> (BaseLayout.astro) that a plain server
-  // POST endpoint (src/pages/admin/site/**/save.ts) already knows how to
-  // read as ordinary form fields.
-  const form = document.getElementById("cms-editor-form") as HTMLFormElement | null;
+  // Éditeur visuel Phase 2 — mobile toolbar collapse toggle. Desktop never
+  // sees this button (hidden via CSS), so this listener is harmless there.
+  const toolbarToggle = document.querySelector<HTMLButtonElement>("[data-cms-toolbar-toggle]");
+  const toolbarBody = document.getElementById("cms-toolbar-body");
+  toolbarToggle?.addEventListener("click", () => {
+    const expanded = toolbarToggle.getAttribute("aria-expanded") === "true";
+    toolbarToggle.setAttribute("aria-expanded", String(!expanded));
+    toolbarBody?.classList.toggle("cms-toolbar__body--expanded", !expanded);
+  });
+</script>
 
-  function hiddenInput(name: string): HTMLInputElement {
-    if (!form) throw new Error("cms-editor-form missing");
+<script>
+  // Éditeur visuel Phase 1/2 — the one place that turns the shared, mostly-
+  // declarative Editable/EditableImage markup into an actual save request.
+  // Never talks to D1 directly; only ever populates a plain <form> that a
+  // server POST endpoint already knows how to read as ordinary form
+  // fields. Phase 1 only ever had one such form (BaseLayout.astro's
+  // #cms-editor-form); Phase 2's per-slot Travail editing
+  // (GallerySlot.astro) adds more, each its own <form data-cms-form> — so
+  // this wires EVERY `[data-cms-form]` on the page the same way, scoping
+  // the field sync to that specific form (never `document`-wide) so
+  // sibling slot forms never clobber each other on submit.
+  function hiddenInput(form: HTMLFormElement, name: string): HTMLInputElement {
     let input = form.querySelector<HTMLInputElement>(`input[type="hidden"][name="${CSS.escape(name)}"]`);
     if (!input) {
       input = document.createElement("input");
@@ -217,20 +268,20 @@ const editHref = withParams(currentPath, { lang: locale, mode: undefined });
     return input;
   }
 
-  if (form) {
+  document.querySelectorAll<HTMLFormElement>("form[data-cms-form]").forEach((form) => {
     form.addEventListener("submit", () => {
-      document.querySelectorAll<HTMLElement>("[data-cms-field]").forEach((el) => {
+      form.querySelectorAll<HTMLElement>("[data-cms-field]").forEach((el) => {
         const field = el.dataset.cmsField;
         if (!field) return;
-        hiddenInput(field).value = el.textContent?.trim() ?? "";
+        hiddenInput(form, field).value = el.textContent?.trim() ?? "";
       });
-      document.querySelectorAll<HTMLElement>("[data-cms-media-field]").forEach((el) => {
+      form.querySelectorAll<HTMLElement>("[data-cms-media-field]").forEach((el) => {
         const field = el.dataset.cmsMediaField;
         if (!field) return;
-        hiddenInput(field).value = el.dataset.cmsMediaId ?? "";
+        hiddenInput(form, field).value = el.dataset.cmsMediaId ?? "";
       });
     });
-  }
+  });
 
   document.querySelectorAll<HTMLElement>("[data-cms-field]").forEach((el) => {
     el.addEventListener("input", () => {
@@ -239,11 +290,20 @@ const editHref = withParams(currentPath, { lang: locale, mode: undefined });
   });
 
   const dialog = document.getElementById("cms-media-picker") as HTMLDialogElement | null;
-  let targetField: string | null = null;
+  // Éditeur visuel Phase 2 — tracks the actual wrapper ELEMENT the trigger
+  // belongs to (found once, at click time, via the nearest ancestor
+  // `[data-cms-media-field]`), not a bare field-name string looked up
+  // globally afterwards. Phase 1 only ever had one image field per page,
+  // so a global `document.querySelector` by field name was unambiguous;
+  // Phase 2's per-slot Travail gallery (GallerySlot.astro) can have many
+  // "mediaId" fields on the same page, one per slot form — this makes the
+  // shared dialog correctly target the ONE slot that opened it regardless
+  // of how many other forms reuse the same field name.
+  let targetWrapper: HTMLElement | null = null;
 
   document.querySelectorAll<HTMLElement>("[data-cms-open-media-picker]").forEach((btn) => {
     btn.addEventListener("click", () => {
-      targetField = btn.dataset.cmsOpenMediaPicker ?? null;
+      targetWrapper = btn.closest<HTMLElement>("[data-cms-media-field]");
       dialog?.showModal();
     });
   });
@@ -254,14 +314,13 @@ const editHref = withParams(currentPath, { lang: locale, mode: undefined });
 
   dialog?.querySelectorAll<HTMLElement>("[data-cms-media-option]").forEach((option) => {
     option.addEventListener("click", () => {
-      if (!targetField || !dialog) return;
-      const wrapper = document.querySelector<HTMLElement>(`[data-cms-media-field="${CSS.escape(targetField)}"]`);
+      if (!targetWrapper || !dialog) return;
       const mediaId = option.dataset.mediaId;
       const mediaSrc = option.dataset.mediaSrc;
-      if (wrapper && mediaId && mediaSrc) {
-        wrapper.dataset.cmsMediaId = mediaId;
-        wrapper.setAttribute("data-cms-dirty", "true");
-        const img = wrapper.querySelector("img");
+      if (mediaId && mediaSrc) {
+        targetWrapper.dataset.cmsMediaId = mediaId;
+        targetWrapper.setAttribute("data-cms-dirty", "true");
+        const img = targetWrapper.querySelector("img");
         if (img) img.src = mediaSrc;
       }
       dialog.close();
@@ -291,6 +350,71 @@ const editHref = withParams(currentPath, { lang: locale, mode: undefined });
     font-weight: 600;
     letter-spacing: 0.02em;
     white-space: nowrap;
+  }
+
+  /* Mobile-only collapse toggle — desktop never renders it. */
+  .cms-toolbar__toggle {
+    display: none;
+    margin-inline-start: auto;
+    font-family: var(--font-sans);
+    font-size: var(--text-small);
+    background: transparent;
+    color: #f2ede6;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    border-radius: var(--radius-sm);
+    padding: var(--space-1) var(--space-3);
+    min-height: 2rem;
+    cursor: pointer;
+  }
+
+  .cms-toolbar__body {
+    display: contents;
+  }
+
+  @media (max-width: 767px) {
+    /*
+     * Éditeur visuel Phase 2 — mobile toolbar fix (Boris's staging
+     * feedback: "toolbar trop haute" / "boutons surdimensionnés"). The
+     * always-visible bar collapses to one compact row (label + toggle);
+     * everything else moves into a scrollable panel shown only once
+     * tapped, and every control inside shrinks — never a full redesign,
+     * same components/classes, just smaller and hidden-by-default here.
+     */
+    .cms-toolbar {
+      padding-block: var(--space-2);
+      gap: var(--space-2);
+    }
+
+    .cms-toolbar__toggle {
+      display: inline-flex;
+    }
+
+    .cms-toolbar__body {
+      display: none;
+      flex-basis: 100%;
+      flex-direction: column;
+      gap: var(--space-3);
+      max-height: 60vh;
+      overflow-y: auto;
+      padding-top: var(--space-2);
+      border-top: 1px solid rgba(255, 255, 255, 0.15);
+    }
+
+    .cms-toolbar__body--expanded {
+      display: flex;
+    }
+
+    .cms-toolbar__actions,
+    .cms-toolbar__lang-status {
+      margin-inline-start: 0;
+    }
+
+    .cms-toolbar__primary,
+    .cms-toolbar__ghost {
+      min-height: 2.25rem;
+      padding: var(--space-1) var(--space-3);
+      font-size: 0.85em;
+    }
   }
 
   .cms-toolbar__pages {
@@ -399,6 +523,70 @@ const editHref = withParams(currentPath, { lang: locale, mode: undefined });
   .cms-toolbar__quit:hover,
   .cms-toolbar__quit:focus-visible {
     color: #fff;
+  }
+
+  /* LAYOUT PICKER (Travail — Phase 2) — sits above the toolbar bar itself,
+     fixed to the bottom like the toolbar, so it's always visible without
+     scrolling past the gallery. Visual cards, never a bare <select> — see
+     Boris's brief §6. */
+  .cms-layout-picker {
+    position: fixed;
+    inset-inline: 0;
+    bottom: 3.75rem;
+    z-index: 998;
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-3);
+    padding: var(--space-3) var(--space-6);
+    background: rgba(20, 18, 16, 0.92);
+    backdrop-filter: blur(8px);
+  }
+
+  .cms-layout-picker__option {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 10rem;
+    max-width: 16rem;
+    padding: var(--space-2) var(--space-3);
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    color: rgba(242, 237, 230, 0.75);
+  }
+
+  .cms-layout-picker__option input {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .cms-layout-picker__option:hover,
+  .cms-layout-picker__option:focus-within {
+    border-color: rgba(255, 255, 255, 0.5);
+  }
+
+  .cms-layout-picker__option--active {
+    border-color: var(--color-accent-warm);
+    color: #fff;
+  }
+
+  .cms-layout-picker__label {
+    font-family: var(--font-sans);
+    font-weight: 600;
+    font-size: var(--text-small);
+  }
+
+  .cms-layout-picker__description {
+    font-size: 0.75rem;
+    opacity: 0.8;
+  }
+
+  @media (max-width: 767px) {
+    .cms-layout-picker {
+      position: static;
+      bottom: auto;
+    }
   }
 
   /* MEDIA PICKER DIALOG */

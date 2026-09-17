@@ -18,7 +18,7 @@ import { getMedia } from "@/lib/db/media";
 import { isMediaUsedByPublicWorkItem } from "@/lib/db/work";
 import { isMediaUsedByPublicService } from "@/lib/db/services";
 import { isMediaUsedByPublicTestimonial } from "@/lib/db/testimonials";
-import { isMediaUsedByPublicHomeContent } from "@/lib/db/pages";
+import { isMediaUsedByPublicHomeContent, isMediaUsedByPublicAboutContent } from "@/lib/db/pages";
 
 export function publicMediaFileUrl(mediaId: number): string {
   return `/media/${mediaId}/file`;
@@ -63,7 +63,8 @@ export async function resolvePublicMediaObject(
     (await isMediaUsedByPublicWorkItem(db, mediaId)) ||
     (await isMediaUsedByPublicService(db, mediaId)) ||
     (await isMediaUsedByPublicTestimonial(db, mediaId)) ||
-    (await isMediaUsedByPublicHomeContent(db, mediaId));
+    (await isMediaUsedByPublicHomeContent(db, mediaId)) ||
+    (await isMediaUsedByPublicAboutContent(db, mediaId));
   if (!isPublic) return null;
 
   const object = await bucket.get(row.storage_key);

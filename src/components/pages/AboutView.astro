@@ -6,55 +6,140 @@ import Heading from "@/components/Heading.astro";
 import Text from "@/components/Text.astro";
 import EditorialLink from "@/components/EditorialLink.astro";
 import ImageFrame from "@/components/ImageFrame.astro";
+import Editable from "@/components/admin/Editable.astro";
+import EditableImage from "@/components/admin/EditableImage.astro";
 import ScrollReveal from "@/components/ScrollReveal.astro";
 import { getPath, type Locale } from "@/i18n/routes";
 import { aboutMock } from "@/data/mock/about";
 import { placeholderPhotos } from "@/lib/placeholder-photos";
 import { t } from "@/i18n/ui";
+import { getDb } from "@/lib/db/client";
+import * as pages from "@/lib/db/pages";
+import { getMedia } from "@/lib/db/media";
+import { publicMediaFileUrl } from "@/lib/public-media";
+import { mediaFileUrl } from "@/lib/admin/media-preview";
+import type { AboutApproachItemRow, AboutContentRow, AboutStoryParagraphRow } from "@/lib/db/types";
 
 interface Props {
   locale: Locale;
+  /**
+   * Éditeur visuel Phase 2 — same 3-mode convention as HomeView/ServicesView/
+   * WorkView. Editable scope here is deliberately "au minimum" (Boris's
+   * brief): hero title/intro/image, story text, the approach elements
+   * already in the schema, and the final CTA headline. The breathing image
+   * and human note sections stay on the mock this phase — reusing existing
+   * tables for what IS wired, not inventing editing for everything the
+   * schema happens to allow.
+   */
+  mode?: "public" | "edit" | "preview";
+  saveAction?: string;
 }
 
-const { locale } = Astro.props;
+const { locale, mode = "public", saveAction } = Astro.props;
+const editable = mode === "edit";
 const copy = t(locale);
 const content = aboutMock[locale];
+
+let aboutRow: AboutContentRow | null = null;
+let storyParagraphs: AboutStoryParagraphRow[] = [];
+let approachItems: AboutApproachItemRow[] = [];
+try {
+  const db = getDb();
+  aboutRow = mode === "public" ? await pages.aboutContent.getPublished(db) : ((await pages.aboutContent.getDraft(db)) ?? (await pages.aboutContent.getPublished(db)));
+  if (aboutRow) {
+    storyParagraphs = await pages.aboutContent.getStoryParagraphs(db, aboutRow.id);
+    approachItems = await pages.aboutContent.getApproachItems(db, aboutRow.id);
+  }
+} catch (err) {
+  console.error("AboutView: about_content D1 read failed", err instanceof Error ? err.message : err);
+}
+
+const langLive = aboutRow !== null && (mode !== "public" || (locale === "fr" ? aboutRow.fr_status === "published" : aboutRow.en_status === "published"));
+
+const heroTitle = langLive ? (locale === "fr" ? aboutRow!.hero_title_fr : aboutRow!.hero_title_en) : content.hero.title;
+const heroIntro = langLive ? (locale === "fr" ? aboutRow!.hero_intro_fr : aboutRow!.hero_intro_en) : content.hero.intro;
+const storyLabel = langLive ? (locale === "fr" ? aboutRow!.story_label_fr : aboutRow!.story_label_en) : content.story.label;
+const approachLabel = langLive ? (locale === "fr" ? aboutRow!.approach_label_fr : aboutRow!.approach_label_en) : content.approach.label;
+const finalCtaHeadline = langLive ? (locale === "fr" ? aboutRow!.final_cta_headline_fr : aboutRow!.final_cta_headline_en) : content.finalCta.headline;
+
+let heroImageSrc: string = placeholderPhotos[content.hero.imageKey];
+let heroImageAlt = content.hero.imageAlt;
+let heroRatio = content.hero.ratio;
+const heroMediaId = aboutRow?.hero_media_id ?? 0;
+if (langLive && aboutRow) {
+  try {
+    const media = await getMedia(getDb(), aboutRow.hero_media_id);
+    if (media) {
+      heroImageSrc = mode === "public" ? publicMediaFileUrl(aboutRow.hero_media_id) : mediaFileUrl(aboutRow.hero_media_id);
+      heroImageAlt = locale === "fr" ? aboutRow.hero_image_alt_fr : aboutRow.hero_image_alt_en;
+      heroRatio = aboutRow.hero_ratio;
+    }
+  } catch (err) {
+    console.error("AboutView: hero media D1 read failed", err instanceof Error ? err.message : err);
+  }
+}
+
+// Fixed-count children (Boris's brief: editing the elements ALREADY in the
+// schema, never add/remove this phase) — real D1 rows once langLive,
+// otherwise the mock's own paragraphs/items so the page never renders an
+// empty section before the first publish.
+const storyParagraphTexts: string[] = langLive && storyParagraphs.length > 0
+  ? storyParagraphs.map((p) => (locale === "fr" ? p.text_fr : p.text_en))
+  : content.story.paragraphs;
+const approachItemsDisplay: { word: string; text: string }[] = langLive && approachItems.length > 0
+  ? approachItems.map((i) => ({ word: locale === "fr" ? i.word_fr : i.word_en, text: locale === "fr" ? i.text_fr : i.text_en }))
+  : content.approach.items;
 ---
 
 <BaseLayout
   locale={locale}
   pageId="about"
-  title={content.hero.title}
-  description={content.hero.intro}
+  title={heroTitle}
+  description={heroIntro}
+  editorFormAction={editable ? saveAction : undefined}
 >
   <Section spacing="none">
-    <ImageFrame
-      src={placeholderPhotos[content.hero.imageKey]}
-      alt={content.hero.imageAlt}
-      ratio={content.hero.ratio}
-      class="media-hover"
+    <EditableImage
+      field="heroMediaId"
+      src={heroImageSrc}
+      alt={heroImageAlt}
+      mediaId={heroMediaId}
+      ratio={heroRatio}
+      editable={editable}
     />
   </Section>
 
   <Section>
     <Container class="about-hero">
       <div data-reveal>
-        <Heading level={1} size="display">{content.hero.title}</Heading>
+        <Heading level={1} size="display">
+          <Editable field={locale === "fr" ? "heroTitleFr" : "heroTitleEn"} locale={locale} editable={editable}>
+            {heroTitle}
+          </Editable>
+        </Heading>
         <Text as="p" size="lg" tone="secondary" class="about-hero__intro">
-          {content.hero.intro}
+          <Editable field={locale === "fr" ? "heroIntroFr" : "heroIntroEn"} locale={locale} editable={editable} multiline>
+            {heroIntro}
+          </Editable>
         </Text>
       </div>
     </Container>
   </Section>
 
-  <Section aria-label={content.story.label}>
+  <Section aria-label={storyLabel}>
     <Container class="about-story">
       <div data-reveal>
-        <Heading level={2} size="eyebrow">{content.story.label}</Heading>
+        <Heading level={2} size="eyebrow">
+          <Editable field={locale === "fr" ? "storyLabelFr" : "storyLabelEn"} locale={locale} editable={editable}>
+            {storyLabel}
+          </Editable>
+        </Heading>
         <div class="about-story__paragraphs">
-          {content.story.paragraphs.map((paragraph) => (
+          {storyParagraphTexts.map((paragraph, i) => (
             <Text as="p" size="lg">
-              {paragraph}
+              <Editable field={`storyParagraph${i}${locale === "fr" ? "Fr" : "En"}`} locale={locale} editable={editable} multiline>
+                {paragraph}
+              </Editable>
             </Text>
           ))}
         </div>
@@ -62,18 +147,26 @@ const content = aboutMock[locale];
     </Container>
   </Section>
 
-  <Section background="secondary" aria-label={content.approach.label}>
+  <Section background="secondary" aria-label={approachLabel}>
     <Container>
       <div data-reveal>
-        <Heading level={2} size="eyebrow">{content.approach.label}</Heading>
+        <Heading level={2} size="eyebrow">
+          <Editable field={locale === "fr" ? "approachLabelFr" : "approachLabelEn"} locale={locale} editable={editable}>
+            {approachLabel}
+          </Editable>
+        </Heading>
         <div class="about-approach">
-          {content.approach.items.map((item) => (
+          {approachItemsDisplay.map((item, i) => (
             <div class="about-approach__item">
               <Heading level={3} size="h3">
-                {item.word}
+                <Editable field={`approachItem${i}Word${locale === "fr" ? "Fr" : "En"}`} locale={locale} editable={editable}>
+                  {item.word}
+                </Editable>
               </Heading>
               <Text as="p" tone="secondary">
-                {item.text}
+                <Editable field={`approachItem${i}Text${locale === "fr" ? "Fr" : "En"}`} locale={locale} editable={editable} multiline>
+                  {item.text}
+                </Editable>
               </Text>
             </div>
           ))}
@@ -116,13 +209,19 @@ const content = aboutMock[locale];
   <Section background="secondary" aria-label="Contact">
     <Container>
       <div data-reveal>
-        <Heading level={2} size="display">{content.finalCta.headline}</Heading>
+        <Heading level={2} size="display">
+          <Editable field={locale === "fr" ? "finalCtaHeadlineFr" : "finalCtaHeadlineEn"} locale={locale} editable={editable} multiline>
+            {finalCtaHeadline}
+          </Editable>
+        </Heading>
         <EditorialLink href={getPath("contact", locale)} class="about-cta__link">
           {copy.cta.talkProject}
         </EditorialLink>
       </div>
     </Container>
   </Section>
+
+  <slot name="admin-chrome" slot="admin-chrome" />
 </BaseLayout>
 
 <ScrollReveal />

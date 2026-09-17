@@ -45,6 +45,25 @@ function resolveSrc(image: GalleryImage): string {
         );
       }
 
+      if (block.type === "trio") {
+        return (
+          <div class="gallery-block gallery-block--trio" data-reveal>
+            {block.images.map((image) => (
+              <div class="gallery-block__trio-item">
+                <ImageFrame
+                  src={resolveSrc(image)}
+                  alt={image.alt}
+                  ratio={image.ratio}
+                  focalX={image.focalX}
+                  focalY={image.focalY}
+                  class="media-hover"
+                />
+              </div>
+            ))}
+          </div>
+        );
+      }
+
       const modifier = block.type === "offset" ? `offset offset--${block.side}` : block.type;
 
       return (
@@ -107,6 +126,18 @@ function resolveSrc(image: GalleryImage): string {
     flex: 1;
   }
 
+  /* TRIO — a close row of 3, same rhythm as DUO. */
+  .gallery-block--trio {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+    margin-block: var(--space-6);
+  }
+
+  .gallery-block__trio-item {
+    flex: 1;
+  }
+
   @media (min-width: 375px) {
     /* mobile-only inset/full-bleed variation so the sequence doesn't
        read as one monotonous column (Brief 003, section 19) — full
@@ -142,6 +173,18 @@ function resolveSrc(image: GalleryImage): string {
 
     .gallery-block--duo .gallery-block__duo-item:last-child {
       width: 88%;
+      margin-left: auto;
+    }
+
+    .gallery-block--trio {
+      flex-direction: column;
+    }
+
+    .gallery-block--trio .gallery-block__trio-item {
+      width: 88%;
+    }
+
+    .gallery-block--trio .gallery-block__trio-item:nth-child(2) {
       margin-left: auto;
     }
   }
@@ -204,6 +247,17 @@ function resolveSrc(image: GalleryImage): string {
     .gallery-block--split-even .gallery-block__duo-item {
       flex: 1;
     }
+
+    .gallery-block--trio {
+      flex-direction: row;
+      gap: var(--space-6);
+    }
+
+    .gallery-block--trio .gallery-block__trio-item {
+      width: auto;
+      margin: 0;
+      flex: 1;
+    }
   }
 
   @media (min-width: 1024px) {
@@ -220,6 +274,10 @@ function resolveSrc(image: GalleryImage): string {
     }
 
     .gallery-block--duo {
+      gap: var(--space-8);
+    }
+
+    .gallery-block--trio {
       gap: var(--space-8);
     }
   }

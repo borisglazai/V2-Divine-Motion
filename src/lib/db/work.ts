@@ -255,6 +255,66 @@ export async function setWorkItemLanguageStatus(
   });
 }
 
+/**
+ * Éditeur visuel Phase 2 — per-slot metadata the Travail admin editor
+ * needs alongside the merged, displayable row (below): whether a draft is
+ * open, its own id (for publishWorkItem/deleteWorkItemDraft), and whether
+ * this is a brand-new item that has never been published (created via a
+ * slot's "Ajouter une photo" — src/lib/work-gallery-adapter.ts's empty
+ * slots), which has no fr_status/en_status yet.
+ */
+export interface AdminGalleryItemMeta {
+  hasDraft: boolean;
+  draftId: number | null;
+  isNewDraft: boolean;
+  frStatus: WorkItemRow["fr_status"] | null;
+  enStatus: WorkItemRow["en_status"] | null;
+}
+
+/**
+ * The Travail admin editor's read: one row per logical work item, in
+ * public position order, each showing its DRAFT content when one is open
+ * (same "admin must see their own unpublished work" rule as
+ * pages.ts/HomeView.astro) — but keyed by the PUBLISHED id (`row.id` is
+ * deliberately overwritten to the published id when a draft exists), so
+ * every slot-editing action in src/lib/admin/work-slot-actions.ts can
+ * address a slot the exact same way regardless of draft state. Brand-new,
+ * never-published items (draft_of_id null) are appended after every
+ * published item, in their own position order — exactly where
+ * buildAdminGallerySlots' empty-slot assignment places them.
+ */
+export async function listWorkItemsForAdminGallery(
+  db: D1Database,
+): Promise<{ items: WorkItemRow[]; meta: Map<number, AdminGalleryItemMeta> }> {
+  const { results: published } = await db
+    .prepare(`SELECT * FROM work_items WHERE status = 'published' ORDER BY position, id`)
+    .all<WorkItemRow>();
+
+  const meta = new Map<number, AdminGalleryItemMeta>();
+  const items: WorkItemRow[] = [];
+  for (const pub of published) {
+    const draft = (await getDraftOf(db, TABLE, pub.id)) as WorkItemRow | null;
+    items.push(draft ? { ...draft, id: pub.id, position: pub.position, fr_status: pub.fr_status, en_status: pub.en_status } : pub);
+    meta.set(pub.id, {
+      hasDraft: draft !== null,
+      draftId: draft ? draft.id : null,
+      isNewDraft: false,
+      frStatus: pub.fr_status,
+      enStatus: pub.en_status,
+    });
+  }
+
+  const { results: newDrafts } = await db
+    .prepare(`SELECT * FROM work_items WHERE status = 'draft' AND draft_of_id IS NULL ORDER BY position, id`)
+    .all<WorkItemRow>();
+  for (const draft of newDrafts) {
+    items.push(draft);
+    meta.set(draft.id, { hasDraft: true, draftId: draft.id, isNewDraft: true, frStatus: null, enStatus: null });
+  }
+
+  return { items, meta };
+}
+
 export interface ReorderDraftResult {
   publishedId: number;
   draftId: number;

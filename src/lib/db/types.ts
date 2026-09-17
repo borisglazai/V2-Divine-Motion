@@ -231,6 +231,8 @@ export interface HomeContentRow extends Publishable {
   updated_by: string | null;
 }
 
+export type WorkGalleryLayout = "editorial" | "story" | "minimal";
+
 export interface WorkPageContentRow extends Publishable {
   title_fr: string;
   title_en: string;
@@ -238,6 +240,8 @@ export interface WorkPageContentRow extends Publishable {
   intro_en: string;
   cta_headline_fr: string;
   cta_headline_en: string;
+  /** Admin-selected composition identifier (migrations/0006) — see docs/decisions/ADR-014's addendum. The definition of each layout stays in src/lib/work-gallery-layouts.ts, never here. */
+  gallery_layout: WorkGalleryLayout;
   fr_status: PageLanguageStatus;
   en_status: PageLanguageStatus;
   fr_published_at: number | null;

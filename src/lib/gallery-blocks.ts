@@ -38,4 +38,15 @@ export type GalleryBlock =
       left: GalleryImage;
       right: GalleryImage;
       split?: "even" | "left-heavy" | "right-heavy";
+    }
+  | {
+      /**
+       * Visual Editor Phase 2 — a close row of 3 images, added for the
+       * "Story" gallery layout (src/lib/work-gallery-layouts.ts). Same
+       * rule as every other block here: a fixed shape the frontend owns,
+       * never a free arrangement — one more primitive in the closed set,
+       * not a step toward a page builder.
+       */
+      type: "trio";
+      images: [GalleryImage, GalleryImage, GalleryImage];
     };

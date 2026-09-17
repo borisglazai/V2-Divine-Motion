@@ -6,53 +6,95 @@ import Heading from "@/components/Heading.astro";
 import Text from "@/components/Text.astro";
 import EditorialLink from "@/components/EditorialLink.astro";
 import WorkGallery from "@/components/WorkGallery.astro";
+import Editable from "@/components/admin/Editable.astro";
+import TravailGalleryEditor from "@/components/admin/TravailGalleryEditor.astro";
 import ScrollReveal from "@/components/ScrollReveal.astro";
 import { getPath, type Locale } from "@/i18n/routes";
 import { workMock } from "@/data/mock/work";
 import { t } from "@/i18n/ui";
 import { getDb } from "@/lib/db/client";
-import { listPublishedWorkItems } from "@/lib/db/work";
-import { buildGalleryFromWorkItems } from "@/lib/work-gallery-adapter";
+import { listPublishedWorkItems, listWorkItemsForAdminGallery, type AdminGalleryItemMeta } from "@/lib/db/work";
+import * as pages from "@/lib/db/pages";
+import { buildGalleryFromWorkItems, buildAdminGallerySlots, type AdminGallerySlot } from "@/lib/work-gallery-adapter";
 import type { GalleryBlock } from "@/lib/gallery-blocks";
+import type { WorkGalleryLayout, WorkPageContentRow } from "@/lib/db/types";
 
 interface Props {
   locale: Locale;
+  /** Éditeur visuel Phase 2 — same 3-mode convention as HomeView/ServicesView. */
+  mode?: "public" | "edit" | "preview";
+  saveAction?: string;
 }
 
-const { locale } = Astro.props;
+const { locale, mode = "public", saveAction } = Astro.props;
+const editable = mode === "edit";
 const copy = t(locale);
 const content = workMock[locale];
 
-// Validation Brief 014S bug B: the curated *sequence* (title/intro/CTA
-// copy) is still page-level content (workMock — out of scope for this
-// fix, belongs to work_page_content, a separate table this brief never
-// touches). The *gallery* itself now reads real published work_items —
-// this page used to render nothing but mock data regardless of what the
-// CMS held, so "Élément publié" in the admin never had any visible
-// effect here. Fails closed to an empty gallery (never the page-level
-// 500 a D1 error would otherwise cause) — a real visitor seeing a quiet
-// section is better than a broken page.
-let gallery: GalleryBlock[] = [];
+// Éditeur visuel Phase 2 — work_page_content read (title/intro/CTA +
+// gallery_layout), same draft-or-published pattern as HomeView.astro.
+// The gallery itself (below) is entirely independent of this row's
+// existence — work_items have always been real D1 content since
+// Validation Brief 014S, regardless of whether work_page_content has ever
+// been published (fails closed to the "editorial" default layout, same
+// as migrations/0006's own column default, if this row is missing).
+let pageRow: WorkPageContentRow | null = null;
 try {
-  const items = await listPublishedWorkItems(getDb(), locale);
-  gallery = buildGalleryFromWorkItems(items, locale);
+  const db = getDb();
+  pageRow = mode === "public" ? await pages.workPageContent.getPublished(db) : ((await pages.workPageContent.getDraft(db)) ?? (await pages.workPageContent.getPublished(db)));
 } catch (err) {
-  console.error("public /travail: D1 read failed", err instanceof Error ? err.message : err);
+  console.error("WorkView: work_page_content D1 read failed", err instanceof Error ? err.message : err);
+}
+
+const langLive = pageRow !== null && (mode !== "public" || (locale === "fr" ? pageRow.fr_status === "published" : pageRow.en_status === "published"));
+
+const title = langLive ? (locale === "fr" ? pageRow!.title_fr : pageRow!.title_en) : content.title;
+const intro = langLive ? (locale === "fr" ? pageRow!.intro_fr : pageRow!.intro_en) : content.intro;
+const ctaHeadline = langLive ? (locale === "fr" ? pageRow!.cta_headline_fr : pageRow!.cta_headline_en) : content.ctaHeadline;
+const galleryLayout: WorkGalleryLayout = pageRow?.gallery_layout ?? "editorial";
+
+// The gallery — public mode reads only real, live, published items and
+// only ever emits fully-filled composition slots (Validation Brief 014S
+// bug B; Éditeur visuel Phase 2 for the layout/cycling itself). Fails
+// closed to an empty gallery, never a page-level 500.
+let gallery: GalleryBlock[] = [];
+let adminSlots: AdminGallerySlot[] = [];
+let adminMeta: Map<number, AdminGalleryItemMeta> = new Map();
+try {
+  const db = getDb();
+  if (editable) {
+    const { items, meta } = await listWorkItemsForAdminGallery(db);
+    adminSlots = buildAdminGallerySlots(items, galleryLayout);
+    adminMeta = meta;
+  } else {
+    const items = await listPublishedWorkItems(db, locale);
+    gallery = buildGalleryFromWorkItems(items, locale, galleryLayout);
+  }
+} catch (err) {
+  console.error("public /travail: work_items D1 read failed", err instanceof Error ? err.message : err);
 }
 
 const description =
   locale === "fr"
     ? "Une sélection curatée du travail de Divine Motion."
     : "A curated selection of Divine Motion's work.";
+
+const currentPath = Astro.url.pathname + Astro.url.search;
 ---
 
-<BaseLayout locale={locale} pageId="work" title={content.title} description={description}>
+<BaseLayout locale={locale} pageId="work" title={title} description={description} editorFormAction={editable ? saveAction : undefined}>
   <Section spacing="tight">
     <Container>
       <div data-reveal>
-        <Heading level={1} size="display">{content.title}</Heading>
+        <Heading level={1} size="display">
+          <Editable field={locale === "fr" ? "titleFr" : "titleEn"} locale={locale} editable={editable}>
+            {title}
+          </Editable>
+        </Heading>
         <Text as="p" size="lg" tone="secondary" class="work-intro__text">
-          {content.intro}
+          <Editable field={locale === "fr" ? "introFr" : "introEn"} locale={locale} editable={editable} multiline>
+            {intro}
+          </Editable>
         </Text>
       </div>
     </Container>
@@ -60,20 +102,32 @@ const description =
 
   <Section spacing="none">
     <Container>
-      <WorkGallery blocks={gallery} />
+      {
+        editable ? (
+          <TravailGalleryEditor slots={adminSlots} meta={adminMeta} locale={locale} redirectTo={currentPath} />
+        ) : (
+          <WorkGallery blocks={gallery} />
+        )
+      }
     </Container>
   </Section>
 
   <Section background="secondary" aria-label="Contact">
     <Container>
       <div data-reveal>
-        <Heading level={2} size="display">{content.ctaHeadline}</Heading>
+        <Heading level={2} size="display">
+          <Editable field={locale === "fr" ? "ctaHeadlineFr" : "ctaHeadlineEn"} locale={locale} editable={editable} multiline>
+            {ctaHeadline}
+          </Editable>
+        </Heading>
         <EditorialLink href={getPath("contact", locale)} class="work-cta__link">
           {copy.cta.talkProject}
         </EditorialLink>
       </div>
     </Container>
   </Section>
+
+  <slot name="admin-chrome" slot="admin-chrome" />
 </BaseLayout>
 
 <ScrollReveal />
