@@ -107,6 +107,20 @@ jobs:
       - name: Éditeur visuel (site editor) tests
         run: npm run test:cms:site-editor
 
+      # Staging bug fix — Travail's gallery-layout picker (EditorToolbar.astro):
+      # a real browser test (Playwright), not `node --test` + `fetch()` like
+      # every suite above, because the bug was entirely in client-side JS/CSS
+      # state a plain HTTP request can't exercise. Runs `astro dev` (bypasses
+      # Cloudflare Access by design in DEV mode — src/lib/auth/guard.ts) and
+      # seeds its own work_page_content row directly against the same default
+      # local D1, since this job's earlier "Migrate local D1" step never
+      # seeds it. See tests/admin/layout-picker.browser.test.ts's header.
+      - name: Install Playwright browser (layout picker test)
+        run: npx playwright install --with-deps chromium
+
+      - name: Travail layout picker browser test
+        run: npm run test:browser
+
       # Media Library + R2 upload foundation (Implementation Brief 014).
       # tests/storage/*.test.ts are pure (no D1/R2/network — key
       # generation, magic-byte/dimension parsing, SigV4 presign

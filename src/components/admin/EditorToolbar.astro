@@ -289,6 +289,25 @@ const editHref = withParams(currentPath, { lang: locale, mode: undefined });
     });
   });
 
+  // Éditeur visuel Phase 2 — Travail gallery-layout picker (staging bug:
+  // clicking Story/Minimal correctly checked the underlying radio — see
+  // `form="cms-editor-form"` on each <input> — and Enregistrer + reload
+  // DID persist it, but `.cms-layout-picker__option--active` was only
+  // ever computed server-side from the page's initial `galleryLayout`
+  // prop, so nothing ever visually reflected the click before a reload.
+  // The native radio group already handles selection itself (mouse,
+  // keyboard, touch alike) — this only keeps the VISUAL state in sync
+  // with it, via the radio's own `change` event.
+  function syncLayoutPickerActiveClass(): void {
+    document.querySelectorAll<HTMLElement>(".cms-layout-picker__option").forEach((label) => {
+      const input = label.querySelector<HTMLInputElement>('input[name="galleryLayout"]');
+      label.classList.toggle("cms-layout-picker__option--active", !!input?.checked);
+    });
+  }
+  document.querySelectorAll<HTMLInputElement>('input[name="galleryLayout"]').forEach((input) => {
+    input.addEventListener("change", syncLayoutPickerActiveClass);
+  });
+
   const dialog = document.getElementById("cms-media-picker") as HTMLDialogElement | null;
   // Éditeur visuel Phase 2 — tracks the actual wrapper ELEMENT the trigger
   // belongs to (found once, at click time, via the nearest ancestor
@@ -586,6 +605,14 @@ const editHref = withParams(currentPath, { lang: locale, mode: undefined });
     .cms-layout-picker {
       position: static;
       bottom: auto;
+      /* Bug found while mobile-smoke-testing this fix: in normal flow the
+         picker's own content could still end up sitting directly above
+         the toolbar's collapsed fixed bar with no gap, so its bottom
+         option was partially covered and untappable at that exact
+         viewport height. Reserve the same space BaseLayout.astro already
+         reserves for the collapsed toolbar (`#cms-editor-form`'s mobile
+         `padding-bottom: 3.5rem`), so nothing here ever sits under it. */
+      margin-bottom: 3.5rem;
     }
   }
 

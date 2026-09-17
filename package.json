@@ -28,7 +28,8 @@
     "test:cms:site-editor": "node --import tsx --test tests/admin/site-editor-validation.test.ts tests/admin/site-editor-endpoints.test.ts tests/admin/site-editor-bugfix.test.ts tests/admin/site-editor-phase2-validation.test.ts",
     "test:storage": "node --import tsx --test tests/storage/keys.test.ts tests/storage/image-inspect.test.ts tests/storage/r2-presign.test.ts",
     "test:media": "node --import tsx --test tests/admin/media-actions.test.ts",
-    "test:public": "node --import tsx --test tests/public/work-gallery-adapter.test.ts tests/public/public-media.test.ts tests/public/work-view.test.ts tests/public/service-layout.test.ts tests/public/services-view.test.ts tests/public/testimonials-view.test.ts tests/public/site-editor-view.test.ts tests/public/site-editor-phase2.test.ts"
+    "test:public": "node --import tsx --test tests/public/work-gallery-adapter.test.ts tests/public/public-media.test.ts tests/public/work-view.test.ts tests/public/service-layout.test.ts tests/public/services-view.test.ts tests/public/testimonials-view.test.ts tests/public/site-editor-view.test.ts tests/public/site-editor-phase2.test.ts",
+    "test:browser": "node --import tsx --test tests/admin/layout-picker.browser.test.ts"
   },
   "dependencies": {
     "@astrojs/cloudflare": "^14.3.1",
@@ -42,6 +43,7 @@
     "@astrojs/check": "^0.9.4",
     "eslint": "^9.17.0",
     "eslint-plugin-astro": "^1.3.1",
+    "playwright": "^1.56.1",
     "tsx": "^4.23.13",
     "typescript": "^5.7.2",
     "typescript-eslint": "^8.18.0",
