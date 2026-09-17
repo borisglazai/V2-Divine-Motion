@@ -18,10 +18,11 @@
  */
 import { before, after, describe, test } from "node:test";
 import assert from "node:assert/strict";
-import { resetTestDb, seedTestDb, closeTestDb } from "../dal/harness";
+import { resetTestDb, seedTestDb, closeTestDb, getTestBucket } from "../dal/harness";
 import * as media from "../../src/lib/db/media";
 import * as pages from "../../src/lib/db/pages";
 import { isMediaUsedByPublicHomeContent } from "../../src/lib/db/pages";
+import { resolvePublicMediaObject } from "../../src/lib/public-media";
 import { saveHomeEditorAction, publishHomeEditorAction, setHomeEditorLanguageStatusAction } from "../../src/lib/admin/home-editor-actions";
 import {
   saveServicesPageEditorAction,
@@ -29,11 +30,13 @@ import {
 } from "../../src/lib/admin/services-page-editor-actions";
 
 let db: D1Database;
+let bucket: R2Bucket;
 const UPDATED_BY = "site-editor-view-test@divinemotion.ca";
 
 before(async () => {
   db = await resetTestDb(".wrangler-test-public-siteeditor");
   seedTestDb();
+  bucket = await getTestBucket();
 });
 
 after(async () => {
@@ -85,6 +88,49 @@ describe("Éditeur visuel — Accueil: draft never public, publish makes it publ
   test("EN was never touched — the EN public page keeps its own seeded headline", async () => {
     const en = await publicHeroHeadline("en");
     assert.equal(en.headline, "Images that stay in motion.");
+  });
+
+  test("modify home hero media -> save -> publish -> public receives new media (exact chain requested by the staging bug report)", async () => {
+    const bytes = new TextEncoder().encode("fake JPEG bytes for the hero-media publish chain test");
+    const created = await media.createMediaMetadata(db, { storageKey: "media/site-editor-new-hero.jpg", mimeType: "image/jpeg", sizeBytes: bytes.byteLength }, UPDATED_BY);
+    assert.ok(created.ok);
+    if (!created.ok) return;
+    const newMediaId = created.data.id;
+    await bucket.put("media/site-editor-new-hero.jpg", bytes);
+    await media.markMediaUploaded(db, newMediaId);
+    await media.markMediaReady(db, newMediaId, { width: 4000, height: 3000 });
+    await media.updateMediaMetadata(db, newMediaId, { publicationRightsConfirmed: true }, UPDATED_BY);
+
+    const beforePublished = await pages.homeContent.getPublished(db);
+    const oldMediaId = beforePublished!.hero_media_id;
+    assert.notEqual(oldMediaId, newMediaId);
+
+    // "Enregistrer" — save the new hero media to the draft.
+    const saveResult = await saveHomeEditorAction(db, { heroMediaId: newMediaId }, UPDATED_BY);
+    assert.match(saveResult.redirect, /flash=success/);
+
+    // Public page must still resolve the OLD media — draft never public.
+    const stillOldPublished = await pages.homeContent.getPublished(db);
+    assert.equal(stillOldPublished!.hero_media_id, oldMediaId);
+
+    // "Publier" — the content merge that actually makes edited fields live.
+    const publishResult = await publishHomeEditorAction(db, UPDATED_BY);
+    assert.match(publishResult.redirect, /flash=success/);
+
+    // Public FR page (already live from the earlier test in this suite)
+    // now reflects the new hero media, resolvable through the real public
+    // media route exactly as HomeView.astro's <EditableImage> would render it.
+    const afterPublished = await pages.homeContent.getPublished(db);
+    assert.equal(afterPublished!.hero_media_id, newMediaId);
+    assert.equal(afterPublished!.fr_status, "published", "FR must still be live — this edit didn't touch language status");
+
+    assert.equal(await isMediaUsedByPublicHomeContent(db, newMediaId), true, "the new hero media must now be recognized as publicly used");
+    const resolved = await resolvePublicMediaObject(db, bucket, newMediaId);
+    assert.ok(resolved, "the new hero media must be readable through the public media route");
+    assert.equal(resolved!.mimeType, "image/jpeg");
+
+    // And the OLD hero media, no longer referenced anywhere, is no longer publicly resolvable.
+    assert.equal(await isMediaUsedByPublicHomeContent(db, oldMediaId), false);
   });
 
   test("unpublishing FR falls back the public FR page to the mock (langLive false)", async () => {

@@ -99,7 +99,11 @@ jobs:
       # src/lib/admin/home-editor-actions.ts / services-page-editor-actions.ts
       # functions against their own isolated local D1 via the same
       # Miniflare harness (tests/dal/harness.ts) — same independence as
-      # every CMS suite above.
+      # every CMS suite above. site-editor-bugfix.test.ts is a targeted
+      # regression test for a real staging bug (Enregistrer reporting
+      # success against a home_content table with no published row,
+      # Publier FR then failing NOT_FOUND) — see
+      # src/lib/admin/site-editor-shared.ts's `ensureSiteEditorDraft` doc.
       - name: Éditeur visuel (site editor) tests
         run: npm run test:cms:site-editor
 

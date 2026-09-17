@@ -9,22 +9,41 @@
  */
 import { getMedia } from "@/lib/db/media";
 import type { Locale, Result } from "@/lib/db/types";
+import { fail } from "@/lib/db/types";
 import { withFlash } from "./flash";
 import { adminErrorMessage } from "./errors";
 
 export interface SiteEditorRepo<Row extends { id: number }> {
+  getPublished(db: D1Database): Promise<Row | null>;
   getDraft(db: D1Database): Promise<Row | null>;
   createDraft(db: D1Database, updatedBy?: string): Promise<Result<{ draftId: number }>>;
   publish(db: D1Database, draftId: number, updatedBy?: string): Promise<Result<{ publishedId: number }>>;
   setLanguageStatus(db: D1Database, locale: Locale, status: "draft" | "published", updatedBy?: string): Promise<Result<void>>;
 }
 
-/** Opens the existing draft, or creates one from the published row — same "edit always touches a draft" rule as every other CMS module. */
+/**
+ * Opens the existing draft, or creates one from the published row — same
+ * "edit always touches a draft" rule as every other CMS module.
+ *
+ * Bug fix (staging validation): this used to trust `repo.getDraft(db)`
+ * alone — if a draft happened to exist, it was reused without ever
+ * confirming a published row still exists, so "Enregistrer" could report
+ * success on a table with no live published row while "Publier FR"/
+ * "Publier" (which both correctly require one) then failed with a
+ * confusing NOT_FOUND, well after the save had already looked fine. Save
+ * and publish now share the exact same "a published row must exist"
+ * precondition, so a table in that state fails clearly and immediately
+ * at save time instead of appearing to succeed and breaking later.
+ */
 export async function ensureSiteEditorDraft<Row extends { id: number }>(
   db: D1Database,
   repo: SiteEditorRepo<Row>,
   updatedBy: string,
 ): Promise<Result<{ draftId: number }>> {
+  const published = await repo.getPublished(db);
+  if (!published) {
+    return fail("NOT_FOUND", "no published row to draft from — this page has never been published");
+  }
   const existing = await repo.getDraft(db);
   if (existing) return { ok: true, data: { draftId: existing.id } };
   return repo.createDraft(db, updatedBy);
