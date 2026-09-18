@@ -17,9 +17,11 @@ import { getDb } from "@/lib/db/client";
 import { listPublishedTestimonials } from "@/lib/db/testimonials";
 import { getMedia } from "@/lib/db/media";
 import * as pages from "@/lib/db/pages";
+import { listFeaturedOnHome } from "@/lib/db/work";
+import { listPublishedServices, type ServiceWithFeatures } from "@/lib/db/services";
 import { publicMediaFileUrl } from "@/lib/public-media";
 import { mediaFileUrl } from "@/lib/admin/media-preview";
-import type { HomeContentRow, TestimonialRow } from "@/lib/db/types";
+import type { HomeContentRow, TestimonialRow, WorkItemRow } from "@/lib/db/types";
 
 interface Props {
   locale: Locale;
@@ -98,6 +100,40 @@ try {
 } catch (err) {
   console.error("public / (home): testimonials D1 read failed", err instanceof Error ? err.message : err);
 }
+
+// Travail preview: real featured work_items, not homeMock. Travail stays
+// the single source of truth — `featured_on_home`, order, media and
+// publication are curated from /admin/work only, never from a
+// Home-specific control (Boris's Visual Editor Phase 4 addendum). Reuses
+// listFeaturedOnHome (src/lib/db/work.ts) as-is: same published/visible/
+// language-status gate as the public Travail page, already ordered by
+// position. Capped at 6 (the mosaic's fixed slot count); fewer than 6 is
+// rendered as-is (see the count-aware `.work-mosaic` CSS below) rather
+// than padded with placeholders. Zero featured items hides the whole
+// section — same fail-closed pattern as Témoignages above, never a
+// fallback to placeholderPhotos.
+let featuredWork: WorkItemRow[] = [];
+try {
+  featuredWork = (await listFeaturedOnHome(getDb(), locale)).slice(0, 6);
+} catch (err) {
+  console.error("public / (home): featured work D1 read failed", err instanceof Error ? err.message : err);
+}
+
+// Services preview: real published services, not homeMock. Services stays
+// the single source of truth for these 3 cards — same reasoning as
+// Travail above. Reuses listPublishedServices (src/lib/db/services.ts)
+// as-is (its batched `service_features` fetch is simply unused here, not
+// worth a second, narrower DAL function for). Capped at 3 (the existing
+// editorial layout's card count); fewer than 3 renders cleanly since
+// `.services-editorial`'s CSS grid already degrades gracefully with unused
+// trailing columns. Zero published services hides the section, same
+// fail-closed pattern.
+let previewServices: ServiceWithFeatures[] = [];
+try {
+  previewServices = (await listPublishedServices(getDb(), locale)).slice(0, 3);
+} catch (err) {
+  console.error("public / (home): services preview D1 read failed", err instanceof Error ? err.message : err);
+}
 ---
 
 <BaseLayout
@@ -147,31 +183,38 @@ try {
   </section>
 
   <!-- WORK PREVIEW — a curated selection of media, not a Projects grid
-       (docs/decisions/ADR-003-curated-work-vs-project-model.md). -->
-  <Section aria-label={content.workPreview.label}>
-    <Container>
-      <div data-reveal>
-        <Heading level={2} size="eyebrow">{content.workPreview.label}</Heading>
-        <div class="work-mosaic">
-          {
-            content.workPreview.items.map((item) => (
-              <div class="work-mosaic__item">
-                <ImageFrame
-                  src={placeholderPhotos[item.imageKey]}
-                  alt={item.alt}
-                  ratio={item.ratio}
-                  class="media-hover"
-                />
-              </div>
-            ))
-          }
-        </div>
-        <EditorialLink href={getPath("work", locale)} class="work-mosaic__link">
-          {content.workPreview.linkLabel}
-        </EditorialLink>
-      </div>
-    </Container>
-  </Section>
+       (docs/decisions/ADR-003-curated-work-vs-project-model.md). Real
+       work_items (featured_on_home), not homeMock — see the featuredWork
+       read above. Hidden entirely when nothing is featured, never a
+       placeholder fallback. -->
+  {
+    featuredWork.length > 0 && (
+      <Section aria-label={content.workPreview.label}>
+        <Container>
+          <div data-reveal>
+            <Heading level={2} size="eyebrow">{content.workPreview.label}</Heading>
+            <div class="work-mosaic" data-count={featuredWork.length}>
+              {featuredWork.map((item) => (
+                <div class="work-mosaic__item">
+                  <ImageFrame
+                    src={publicMediaFileUrl(item.media_id)}
+                    alt={locale === "fr" ? item.alt_fr : item.alt_en}
+                    ratio={item.ratio}
+                    focalX={item.focal_x}
+                    focalY={item.focal_y}
+                    class="media-hover"
+                  />
+                </div>
+              ))}
+            </div>
+            <EditorialLink href={getPath("work", locale)} class="work-mosaic__link">
+              {content.workPreview.linkLabel}
+            </EditorialLink>
+          </div>
+        </Container>
+      </Section>
+    )
+  }
 
   <!-- BRAND STATEMENT -->
   <Section background="secondary" aria-label="Brand statement">
@@ -187,37 +230,42 @@ try {
   </Section>
 
   <!-- SERVICES PREVIEW — announces the 3 universes, never a condensed
-       Services page (see Implementation Brief 002, section 9). -->
-  <Section aria-label={content.servicesPreview.label}>
-    <Container>
-      <div data-reveal>
-        <Heading level={2} size="eyebrow">{content.servicesPreview.label}</Heading>
-        <div class="services-editorial">
-          {
-            content.servicesPreview.items.map((item) => (
-              <a class="services-editorial__item" href={getPath("services", locale)}>
-                {/* alt="" deliberately: the visible heading right below
-                    already names this service, so the image is decorative
-                    in this context — not an oversight. */}
-                <ImageFrame
-                  src={placeholderPhotos[item.imageKey]}
-                  alt=""
-                  ratio="4 / 5"
-                  class="media-hover"
-                />
-                <Heading level={3} size="h3">
-                  {item.title}
-                </Heading>
-                <Text as="p" size="body" tone="secondary">
-                  {item.text}
-                </Text>
-              </a>
-            ))
-          }
-        </div>
-      </div>
-    </Container>
-  </Section>
+       Services page (see Implementation Brief 002, section 9). Real
+       published services, not homeMock — see the previewServices read
+       above. Hidden entirely when nothing is published, never a
+       placeholder fallback. -->
+  {
+    previewServices.length > 0 && (
+      <Section aria-label={content.servicesPreview.label}>
+        <Container>
+          <div data-reveal>
+            <Heading level={2} size="eyebrow">{content.servicesPreview.label}</Heading>
+            <div class="services-editorial">
+              {previewServices.map((service) => (
+                <a class="services-editorial__item" href={getPath("services", locale)}>
+                  {/* alt="" deliberately: the visible heading right below
+                      already names this service, so the image is decorative
+                      in this context — not an oversight. */}
+                  <ImageFrame
+                    src={publicMediaFileUrl(service.media_id)}
+                    alt=""
+                    ratio={service.ratio}
+                    class="media-hover"
+                  />
+                  <Heading level={3} size="h3">
+                    {locale === "fr" ? service.title_fr : service.title_en}
+                  </Heading>
+                  <Text as="p" size="body" tone="secondary">
+                    {locale === "fr" ? service.description_fr : service.description_en}
+                  </Text>
+                </a>
+              ))}
+            </div>
+          </div>
+        </Container>
+      </Section>
+    )
+  }
 
   <!-- TESTIMONIALS — Témoignages CMS. Reintroduces the Master Brief §13
        section (dropped from the 15 September redesign's home structure),
@@ -429,6 +477,34 @@ try {
     .work-mosaic__item:nth-child(6) {
       grid-column: span 4;
     }
+
+    /* Count-aware overrides (Éditeur visuel Phase 4 addendum) —
+       featuredWork can have 1-6 real items (not every published item is
+       featured_on_home). The rules above are tuned for exactly 6 and,
+       unmodified, leave an incomplete/short last row for some counts (a
+       "trou visuel incohérent"). 5 already sums correctly as-is (4+2+2 =
+       one full row) — only 1/2/4 need an override, scoped here (and
+       re-stated in the 1024px block below) so they never leak into the
+       single-column mobile layout or fight the desktop spans on
+       specificity. Same visual language as the 6-item composition, not a
+       new layout system. */
+    .work-mosaic[data-count="1"] .work-mosaic__item:nth-child(1) {
+      grid-column: span 4;
+    }
+
+    .work-mosaic[data-count="2"] .work-mosaic__item:nth-child(1),
+    .work-mosaic[data-count="2"] .work-mosaic__item:nth-child(2) {
+      grid-column: span 2;
+    }
+
+    .work-mosaic[data-count="4"] .work-mosaic__item:nth-child(1),
+    .work-mosaic[data-count="4"] .work-mosaic__item:nth-child(4) {
+      grid-column: span 4;
+    }
+    .work-mosaic[data-count="4"] .work-mosaic__item:nth-child(2),
+    .work-mosaic[data-count="4"] .work-mosaic__item:nth-child(3) {
+      grid-column: span 2;
+    }
   }
 
   @media (min-width: 1024px) {
@@ -453,6 +529,37 @@ try {
     }
     .work-mosaic__item:nth-child(6) {
       grid-column: span 6;
+    }
+
+    /* Count-aware overrides, desktop grid (6 columns) — re-stated here
+       (rather than left to the 768px block above) since that block's own
+       min-width also matches at this width: every count that needs a
+       different desktop composition, INCLUDING count 2 (whose tablet
+       override would otherwise win here too on specificity), gets its
+       desktop-specific spans explicitly. 3 items only needs an override
+       here (its tablet composition — 4+2+2 — already sums correctly). */
+    .work-mosaic[data-count="1"] .work-mosaic__item:nth-child(1) {
+      grid-column: span 6;
+    }
+
+    .work-mosaic[data-count="2"] .work-mosaic__item:nth-child(1),
+    .work-mosaic[data-count="2"] .work-mosaic__item:nth-child(2) {
+      grid-column: span 3;
+    }
+
+    .work-mosaic[data-count="3"] .work-mosaic__item:nth-child(1) {
+      grid-column: span 6;
+    }
+    .work-mosaic[data-count="3"] .work-mosaic__item:nth-child(2),
+    .work-mosaic[data-count="3"] .work-mosaic__item:nth-child(3) {
+      grid-column: span 3;
+    }
+
+    .work-mosaic[data-count="4"] .work-mosaic__item:nth-child(1),
+    .work-mosaic[data-count="4"] .work-mosaic__item:nth-child(2),
+    .work-mosaic[data-count="4"] .work-mosaic__item:nth-child(3),
+    .work-mosaic[data-count="4"] .work-mosaic__item:nth-child(4) {
+      grid-column: span 3;
     }
   }
 
