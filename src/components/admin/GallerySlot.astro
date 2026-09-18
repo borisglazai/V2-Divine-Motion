@@ -124,7 +124,7 @@ const canReorder = entry.item !== null && !meta?.isNewDraft;
             class="admin-btn admin-btn--small"
             data-gallery-slot-panel-toggle
             aria-expanded="false"
-            aria-controls={`gallery-slot-panel-${entry.position}`}
+            aria-controls={`gallery-slot-panel-${entry.position} gallery-slot-publish-group-${entry.position}`}
           >
             Modifier
           </button>
@@ -144,6 +144,12 @@ const canReorder = entry.item !== null && !meta?.isNewDraft;
             <Editable field="caption" locale={locale} editable>
               {(locale === "fr" ? entry.item.caption_fr : entry.item.caption_en) ?? ""}
             </Editable>
+          </label>
+
+          <label class="gallery-slot__featured-label">
+            <input type="checkbox" name="featuredOnHome" checked={entry.item.featured_on_home === 1} />
+            Afficher sur l'accueil
+            <span class="gallery-slot__hint">Cette photo peut apparaître dans la sélection Travail de la page d'accueil.</span>
           </label>
 
           <div class="gallery-slot__focal-field">
@@ -171,42 +177,65 @@ const canReorder = entry.item !== null && !meta?.isNewDraft;
           <button type="submit" class="admin-btn">
             Enregistrer l'emplacement
           </button>
-
-          <div class="gallery-slot__publish-group">
-            {meta?.hasDraft && meta.draftId && (
-              <form method="POST" action="/admin/site/travail/slot/publish" class="gallery-slot__inline-form">
-                <input type="hidden" name="draftId" value={meta.draftId} />
-                <input type="hidden" name="redirect" value={redirectTo} />
-                <button type="submit" class="admin-btn admin-btn--small">
-                  Publier cet élément
-                </button>
-              </form>
-            )}
-            {!meta?.isNewDraft && meta?.frStatus !== null && meta?.frStatus !== undefined && (
-              <form method="POST" action="/admin/site/travail/slot/language-status" class="gallery-slot__inline-form">
-                <input type="hidden" name="publishedId" value={entry.item.id} />
-                <input type="hidden" name="locale" value="fr" />
-                <input type="hidden" name="status" value={meta.frStatus === "published" ? "draft" : "published"} />
-                <input type="hidden" name="redirect" value={redirectTo} />
-                <button type="submit" class="admin-btn admin-btn--small">
-                  {meta.frStatus === "published" ? "Dépublier FR" : "Publier FR"}
-                </button>
-              </form>
-            )}
-            {!meta?.isNewDraft && meta?.enStatus !== null && meta?.enStatus !== undefined && (
-              <form method="POST" action="/admin/site/travail/slot/language-status" class="gallery-slot__inline-form">
-                <input type="hidden" name="publishedId" value={entry.item.id} />
-                <input type="hidden" name="locale" value="en" />
-                <input type="hidden" name="status" value={meta.enStatus === "published" ? "draft" : "published"} />
-                <input type="hidden" name="redirect" value={redirectTo} />
-                <button type="submit" class="admin-btn admin-btn--small">
-                  {meta.enStatus === "published" ? "Dépublier EN" : "Publier EN"}
-                </button>
-              </form>
-            )}
-          </div>
         </div>
       </form>
+
+      {
+        /**
+         * Bug found while adding "Afficher sur l'accueil" (this
+         * addendum): these 3 publish/language-status forms used to live
+         * INSIDE .gallery-slot__panel, itself inside the media-form above
+         * — a <form> nested inside another <form>, which is invalid HTML.
+         * Browsers silently drop the inner <form> tag on parse, so every
+         * button "inside" ends up bound to whichever form is still open —
+         * on a page with more than one occupied slot, that can even be an
+         * EARLIER slot's own form. This group is now a sibling of the
+         * media-form instead (same pattern already used correctly for
+         * Retirer/Remettre/Précédent/Suivant just below), each of its 3
+         * forms genuinely independent. It keeps collapsing/expanding
+         * together with .gallery-slot__panel — same toggle, same visible
+         * boundary — via its own matching data-gallery-slot-panel marker
+         * (the toggle script below now updates every element carrying
+         * that attribute within the slot, not just the first).
+         */
+      }
+      <div
+        class="gallery-slot__publish-group"
+        id={`gallery-slot-publish-group-${entry.position}`}
+        data-gallery-slot-panel
+      >
+        {meta?.hasDraft && meta.draftId && (
+          <form method="POST" action="/admin/site/travail/slot/publish" class="gallery-slot__inline-form">
+            <input type="hidden" name="draftId" value={meta.draftId} />
+            <input type="hidden" name="redirect" value={redirectTo} />
+            <button type="submit" class="admin-btn admin-btn--small">
+              Publier cet élément
+            </button>
+          </form>
+        )}
+        {!meta?.isNewDraft && meta?.frStatus !== null && meta?.frStatus !== undefined && (
+          <form method="POST" action="/admin/site/travail/slot/language-status" class="gallery-slot__inline-form">
+            <input type="hidden" name="publishedId" value={entry.item.id} />
+            <input type="hidden" name="locale" value="fr" />
+            <input type="hidden" name="status" value={meta.frStatus === "published" ? "draft" : "published"} />
+            <input type="hidden" name="redirect" value={redirectTo} />
+            <button type="submit" class="admin-btn admin-btn--small">
+              {meta.frStatus === "published" ? "Dépublier FR" : "Publier FR"}
+            </button>
+          </form>
+        )}
+        {!meta?.isNewDraft && meta?.enStatus !== null && meta?.enStatus !== undefined && (
+          <form method="POST" action="/admin/site/travail/slot/language-status" class="gallery-slot__inline-form">
+            <input type="hidden" name="publishedId" value={entry.item.id} />
+            <input type="hidden" name="locale" value="en" />
+            <input type="hidden" name="status" value={meta.enStatus === "published" ? "draft" : "published"} />
+            <input type="hidden" name="redirect" value={redirectTo} />
+            <button type="submit" class="admin-btn admin-btn--small">
+              {meta.enStatus === "published" ? "Dépublier EN" : "Publier EN"}
+            </button>
+          </form>
+        )}
+      </div>
 
       <div class="gallery-slot__toolstrip gallery-slot__toolstrip--secondary">
         {canReorder && !isFirstReorderable && (
@@ -315,13 +344,21 @@ const canReorder = entry.item !== null && !meta?.isNewDraft;
   // for no-JS save; a class toggle purely controls visibility). Scoped via
   // the nearest `[data-gallery-slot]` ancestor rather than an id, since a
   // page can render many slots at once.
+  //
+  // Phase 4 addendum — `[data-gallery-slot-panel]` now matches TWO
+  // sibling elements per slot (.gallery-slot__panel and
+  // .gallery-slot__publish-group), split apart to fix the nested-<form>
+  // bug (see the markup's own comment above .gallery-slot__publish-group)
+  // without changing the collapsed/expanded behavior a visitor sees:
+  // querySelectorAll + forEach toggles both together, same as the single
+  // querySelector used to.
   document.querySelectorAll<HTMLButtonElement>("[data-gallery-slot-panel-toggle]").forEach((toggle) => {
     const slot = toggle.closest<HTMLElement>("[data-gallery-slot]");
-    const panel = slot?.querySelector<HTMLElement>("[data-gallery-slot-panel]");
+    const panels = slot?.querySelectorAll<HTMLElement>("[data-gallery-slot-panel]");
     toggle.addEventListener("click", () => {
       const expanded = toggle.getAttribute("aria-expanded") === "true";
       toggle.setAttribute("aria-expanded", String(!expanded));
-      panel?.classList.toggle("gallery-slot__panel--expanded", !expanded);
+      panels?.forEach((panel) => panel.classList.toggle("gallery-slot__panel--expanded", !expanded));
     });
   });
 
@@ -472,6 +509,22 @@ const canReorder = entry.item !== null && !meta?.isNewDraft;
     border-top: 1px dashed rgba(255, 255, 255, 0.12);
   }
 
+  /* Phase 4 addendum — a sibling of .gallery-slot__panel now (not nested
+     inside it, see the markup's own comment above .gallery-slot__publish-group),
+     but visually still reads as part of the same collapsible block: same
+     default-hidden/expanded toggle (.gallery-slot__panel--expanded, shared
+     with .gallery-slot__panel via the JS above — this rule must stay
+     BELOW both base rules in source order, since it ties with them on
+     specificity and needs the later-wins tiebreak to actually show
+     either one once expanded). No border-top of its own: .gallery-slot__panel
+     right before it already provides that separator. */
+  .gallery-slot__publish-group {
+    display: none;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    padding-top: var(--space-2);
+  }
+
   .gallery-slot__panel--expanded {
     display: flex;
   }
@@ -500,6 +553,20 @@ const canReorder = entry.item !== null && !meta?.isNewDraft;
   .gallery-slot__field-label {
     margin: 0;
     font-size: var(--text-small);
+    color: var(--color-text-secondary);
+  }
+
+  .gallery-slot__featured-label {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: var(--space-1) var(--space-2);
+    font-size: var(--text-small);
+    color: var(--color-text-primary);
+  }
+
+  .gallery-slot__featured-label .gallery-slot__hint {
+    flex-basis: 100%;
     color: var(--color-text-secondary);
   }
 
@@ -542,12 +609,6 @@ const canReorder = entry.item !== null && !meta?.isNewDraft;
     border: 2px solid var(--color-accent-warm);
     background: rgba(20, 18, 16, 0.5);
     pointer-events: none;
-  }
-
-  .gallery-slot__publish-group {
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--space-2);
   }
 
   /* Phase 4 §3 — button visuals now come from the shared .admin-btn

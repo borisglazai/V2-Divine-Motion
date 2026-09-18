@@ -85,7 +85,7 @@ describe("Travail gallery slots — occupied slot edits a draft, empty slot crea
     const slotSave = await saveWorkSlotAction(
       db,
       publishedId,
-      { mediaId: newMediaId, altFr: "alt fr", altEn: "alt en", captionFr: "légende" },
+      { mediaId: newMediaId, altFr: "alt fr", altEn: "alt en", captionFr: "légende", featuredOnHome: false },
       REDIRECT,
       UPDATED_BY,
     );

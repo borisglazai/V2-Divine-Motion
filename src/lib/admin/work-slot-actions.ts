@@ -43,6 +43,18 @@ export interface WorkSlotFields {
   captionEn?: string;
   focalX?: number;
   focalY?: number;
+  /**
+   * "Afficher sur l'accueil" (Phase 4 addendum — the Home Travail preview
+   * reads work_items.featured_on_home directly, src/lib/db/work.ts's
+   * listFeaturedOnHome; this is simply the first admin control for a
+   * column that already existed and was already wired end-to-end). A
+   * plain HTML checkbox in GallerySlot.astro — omitted from the submitted
+   * form entirely when unchecked, so the route parses it as
+   * `formData.get("featuredOnHome") === "on"` before calling this action —
+   * same convention as WorkItemForm.astro's own featuredOnHome checkbox
+   * (src/lib/admin/validation.ts).
+   */
+  featuredOnHome: boolean;
 }
 
 /**
@@ -102,6 +114,7 @@ export async function saveWorkSlotAction(
       captionEn: fields.captionEn ?? null,
       focalX: fields.focalX,
       focalY: fields.focalY,
+      featuredOnHome: fields.featuredOnHome,
     },
     updatedBy,
   );

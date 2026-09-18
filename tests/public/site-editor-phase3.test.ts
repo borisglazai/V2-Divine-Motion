@@ -256,7 +256,7 @@ describe("Alt stays mandatory when editing an EXISTING occupied slot (§11), and
     const before = await work.getWorkItemDraft(db, publishedId);
     assert.equal(before, null, "no draft should exist yet");
 
-    const result = await saveWorkSlotAction(db, publishedId, { mediaId: (await work.getWorkItem(db, publishedId))!.media_id, altFr: "", altEn: "still here" }, REDIRECT, UPDATED_BY);
+    const result = await saveWorkSlotAction(db, publishedId, { mediaId: (await work.getWorkItem(db, publishedId))!.media_id, altFr: "", altEn: "still here", featuredOnHome: false }, REDIRECT, UPDATED_BY);
     assert.ok(!("notFound" in result));
     if ("notFound" in result) return;
     assert.match(result.redirect, /flash=error/);
@@ -270,7 +270,7 @@ describe("Alt stays mandatory when editing an EXISTING occupied slot (§11), and
     const result = await saveWorkSlotAction(
       db,
       publishedId,
-      { mediaId: current!.media_id, altFr: "alt fr modifié", altEn: current!.alt_en, focalX: 20, focalY: 80 },
+      { mediaId: current!.media_id, altFr: "alt fr modifié", altEn: current!.alt_en, focalX: 20, focalY: 80, featuredOnHome: false },
       REDIRECT,
       UPDATED_BY,
     );

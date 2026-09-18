@@ -256,18 +256,69 @@ test("keyboard: focusing 'Modifier' and pressing Enter expands the panel", async
   await page.goto(TRAVAIL_EDITOR_URL, { waitUntil: "networkidle" });
   const slot = seedItemSlot();
   const toggle = slot.locator("[data-gallery-slot-panel-toggle]");
-  const panel = slot.locator("[data-gallery-slot-panel]");
+  const panel = slot.locator(".gallery-slot__panel");
+  // Phase 4 addendum: the publish-group is now a sibling of .gallery-slot__panel
+  // (not nested inside it — fixes a nested-<form> bug, see GallerySlot.astro's
+  // own comment there), but still collapses/expands together with it, via the
+  // same [data-gallery-slot-panel] marker on both and a shared aria-controls.
+  const publishGroup = slot.locator(".gallery-slot__publish-group");
 
   assert.equal(await toggle.getAttribute("aria-expanded"), "false");
   const panelId = await panel.getAttribute("id");
+  const publishGroupId = await publishGroup.getAttribute("id");
   assert.ok(panelId, "the panel must have an id for aria-controls to reference");
-  assert.equal(await toggle.getAttribute("aria-controls"), panelId, "Phase 4: the toggle must point aria-controls at the panel's real id");
+  assert.ok(publishGroupId, "the publish-group must have an id for aria-controls to reference");
+  const ariaControls = (await toggle.getAttribute("aria-controls")) ?? "";
+  assert.deepEqual(
+    ariaControls.split(" "),
+    [panelId, publishGroupId],
+    "Phase 4: the toggle must point aria-controls at both collapsible regions' real ids",
+  );
 
   await toggle.focus();
   await page.keyboard.press("Enter");
 
   assert.equal(await toggle.getAttribute("aria-expanded"), "true", "keyboard activation must expand the panel exactly like a click");
   assert.equal(await panel.evaluate((el) => getComputedStyle(el).display), "flex");
+  assert.equal(await publishGroup.evaluate((el) => getComputedStyle(el).display), "flex", "the publish-group must expand together with the panel");
+});
+
+test("Phase 4 addendum: 'Afficher sur l'accueil' — checking it, saving, and reloading keeps the checked state visible (draft), and writes featured_on_home=1 on the draft row", async () => {
+  await page.goto(TRAVAIL_EDITOR_URL, { waitUntil: "networkidle" });
+  let slot = seedItemSlot();
+  await slot.locator("[data-gallery-slot-panel-toggle]").click();
+
+  const checkbox = slot.locator('input[name="featuredOnHome"]');
+  assert.equal(await checkbox.isChecked(), false, "precondition: the seeded item is not featured");
+  assert.equal(
+    await slot.locator("label", { hasText: "Afficher sur l'accueil" }).locator("span", { hasText: "sélection Travail de la page d'accueil" }).count(),
+    1,
+    "the plain-language help text must be present, not the raw column name",
+  );
+
+  await checkbox.check();
+  // Deliberately NOT { force: true } here: the page's fixed toolbar
+  // (EditorToolbar.astro) can visually sit over this button once the
+  // panel is expanded and pushes the slot's content down — force would
+  // skip Playwright's "not covered by another element" check and could
+  // silently click through to the toolbar instead (found while writing
+  // this test). Letting Playwright auto-scroll and verify the real
+  // target is what actually proves this button submits its own form.
+  await Promise.all([
+    page.waitForURL(/flash=success/, { timeout: 10_000 }),
+    slot.locator("button", { hasText: "Enregistrer l'emplacement" }).click(),
+  ]);
+
+  const draftRowsAfterSave = d1Json<[{ results: { featured_on_home: number }[] }]>(
+    `SELECT featured_on_home FROM work_items WHERE draft_of_id = (SELECT id FROM work_items WHERE position = 9600 AND status = 'published');`,
+  );
+  assert.equal(draftRowsAfterSave[0].results[0]?.featured_on_home, 1, "the draft row must carry featured_on_home=1 right after the save");
+
+  // Reload the editor from scratch — a real navigation, not just re-reading in-memory state.
+  await page.goto(TRAVAIL_EDITOR_URL, { waitUntil: "networkidle" });
+  slot = seedItemSlot();
+  await slot.locator("[data-gallery-slot-panel-toggle]").click();
+  assert.equal(await slot.locator('input[name="featuredOnHome"]').isChecked(), true, "the checked state must survive a full page reload");
 });
 
 test("Retirer requires confirmation — declining leaves the item fully untouched", async () => {

@@ -38,6 +38,10 @@ export const POST: APIRoute = async ({ request, locals, redirect }) => {
   const captionEn = formData.get("captionEn");
   const focalX = Number(formData.get("focalX"));
   const focalY = Number(formData.get("focalY"));
+  // A checkbox is omitted from the submitted form entirely when unchecked
+  // — same "on" convention as src/lib/admin/validation.ts's
+  // WorkItemForm.astro parsing (isVisible/featuredOnHome there).
+  const featuredOnHome = formData.get("featuredOnHome") === "on";
 
   const result = await saveWorkSlotAction(
     getDb(),
@@ -50,6 +54,7 @@ export const POST: APIRoute = async ({ request, locals, redirect }) => {
       captionEn: typeof captionEn === "string" && captionEn !== "" ? captionEn : undefined,
       focalX: Number.isFinite(focalX) ? focalX : undefined,
       focalY: Number.isFinite(focalY) ? focalY : undefined,
+      featuredOnHome,
     },
     redirectTo,
     auth.identity.email,
