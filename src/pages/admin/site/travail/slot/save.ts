@@ -21,20 +21,35 @@ export const POST: APIRoute = async ({ request, locals, redirect }) => {
 
   const id = Number(formData.get("workItemId"));
   const mediaId = Number(formData.get("mediaId"));
-  if (!Number.isInteger(id) || id <= 0 || !Number.isInteger(mediaId) || mediaId <= 0) {
+  const altFr = formData.get("altFr");
+  const altEn = formData.get("altEn");
+  if (
+    !Number.isInteger(id) ||
+    id <= 0 ||
+    !Number.isInteger(mediaId) ||
+    mediaId <= 0 ||
+    typeof altFr !== "string" ||
+    typeof altEn !== "string"
+  ) {
     return redirect(withFlash(redirectTo, "error", "Requête invalide."));
   }
 
   const captionFr = formData.get("captionFr");
   const captionEn = formData.get("captionEn");
+  const focalX = Number(formData.get("focalX"));
+  const focalY = Number(formData.get("focalY"));
 
   const result = await saveWorkSlotAction(
     getDb(),
     id,
     {
       mediaId,
+      altFr,
+      altEn,
       captionFr: typeof captionFr === "string" && captionFr !== "" ? captionFr : undefined,
       captionEn: typeof captionEn === "string" && captionEn !== "" ? captionEn : undefined,
+      focalX: Number.isFinite(focalX) ? focalX : undefined,
+      focalY: Number.isFinite(focalY) ? focalY : undefined,
     },
     redirectTo,
     auth.identity.email,

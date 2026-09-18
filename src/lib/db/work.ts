@@ -291,10 +291,25 @@ export async function listWorkItemsForAdminGallery(
     .all<WorkItemRow>();
 
   const meta = new Map<number, AdminGalleryItemMeta>();
-  const items: WorkItemRow[] = [];
+  const merged: WorkItemRow[] = [];
   for (const pub of published) {
     const draft = (await getDraftOf(db, TABLE, pub.id)) as WorkItemRow | null;
-    items.push(draft ? { ...draft, id: pub.id, position: pub.position, fr_status: pub.fr_status, en_status: pub.en_status } : pub);
+    // Éditeur visuel Phase 3 — a draft's `position` (written by
+    // reorderWorkItemDrafts when the admin uses Précédent/Suivant) is kept
+    // here instead of always falling back to the published position.
+    // Boris's explicit Phase 3 requirement: a reorder must be reflected in
+    // the editor immediately, even though it stays a draft until
+    // published — never an "invisible internal change." Below, `merged` is
+    // re-sorted on this effective position so the array order (which is
+    // what buildAdminGallerySlots actually consumes) picks it up right
+    // away. The public read (listPublishedWorkItems) is untouched: it only
+    // ever reads the published `position` column directly.
+    const effectivePosition = draft ? draft.position : pub.position;
+    merged.push(
+      draft
+        ? { ...draft, id: pub.id, position: effectivePosition, fr_status: pub.fr_status, en_status: pub.en_status }
+        : pub,
+    );
     meta.set(pub.id, {
       hasDraft: draft !== null,
       draftId: draft ? draft.id : null,
@@ -303,16 +318,17 @@ export async function listWorkItemsForAdminGallery(
       enStatus: pub.en_status,
     });
   }
+  merged.sort((a, b) => a.position - b.position || a.id - b.id);
 
   const { results: newDrafts } = await db
     .prepare(`SELECT * FROM work_items WHERE status = 'draft' AND draft_of_id IS NULL ORDER BY position, id`)
     .all<WorkItemRow>();
   for (const draft of newDrafts) {
-    items.push(draft);
+    merged.push(draft);
     meta.set(draft.id, { hasDraft: true, draftId: draft.id, isNewDraft: true, frStatus: null, enStatus: null });
   }
 
-  return { items, meta };
+  return { items: merged, meta };
 }
 
 export interface ReorderDraftResult {

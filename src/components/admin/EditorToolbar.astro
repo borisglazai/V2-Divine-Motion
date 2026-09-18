@@ -197,6 +197,34 @@ const editHref = withParams(currentPath, { lang: locale, mode: undefined });
       {Object.values(GALLERY_LAYOUTS).map((layout) => (
         <label class:list={["cms-layout-picker__option", { "cms-layout-picker__option--active": layout.id === galleryLayout }]}>
           <input type="radio" name="galleryLayout" value={layout.id} checked={layout.id === galleryLayout} form="cms-editor-form" />
+          {/*
+            Éditeur visuel Phase 3 (Boris's brief §8) — a schematic
+            thumbnail of the layout's own slot sequence
+            (work-gallery-layouts.ts's GALLERY_LAYOUTS), built from plain
+            spans proportioned by CSS flex, never real photos: the admin
+            only needs to tell the 3 compositions apart at a glance before
+            picking one, not preview actual content here.
+          */}
+          <span class="cms-layout-thumb" aria-hidden="true">
+            {layout.slots.map((slot) =>
+              slot.block === "duo" ? (
+                <span class="cms-layout-thumb__row cms-layout-thumb__row--duo">
+                  <span class="cms-layout-thumb__cell" style={`flex:${slot.split === "left-heavy" ? 2 : 1}`} />
+                  <span class="cms-layout-thumb__cell" style={`flex:${slot.split === "right-heavy" ? 2 : 1}`} />
+                </span>
+              ) : slot.block === "trio" ? (
+                <span class="cms-layout-thumb__row cms-layout-thumb__row--trio">
+                  <span class="cms-layout-thumb__cell" />
+                  <span class="cms-layout-thumb__cell" />
+                  <span class="cms-layout-thumb__cell" />
+                </span>
+              ) : (
+                <span class:list={["cms-layout-thumb__row", `cms-layout-thumb__row--${slot.block}`]}>
+                  <span class="cms-layout-thumb__cell" />
+                </span>
+              ),
+            )}
+          </span>
           <span class="cms-layout-picker__label">{layout.label}</span>
           <span class="cms-layout-picker__description">{layout.description}</span>
         </label>
@@ -222,6 +250,8 @@ const editHref = withParams(currentPath, { lang: locale, mode: undefined });
             data-cms-media-option
             data-media-id={item.id}
             data-media-src={mediaFileUrl(item.id)}
+            data-media-alt-fr={item.alt_fr ?? ""}
+            data-media-alt-en={item.alt_en ?? ""}
           >
             <img src={mediaFileUrl(item.id)} alt="" loading="lazy" />
             {item.publication_rights_confirmed !== 1 && (
@@ -364,6 +394,25 @@ const editHref = withParams(currentPath, { lang: locale, mode: undefined });
         targetWrapper.setAttribute("data-cms-dirty", "true");
         const img = targetWrapper.querySelector("img");
         if (img) img.src = mediaSrc;
+
+        // Éditeur visuel Phase 3 — alt reuse, creation only (Boris's
+        // validated orientation: "alt média repris uniquement à la
+        // création, jamais en écrasement automatique sur un item
+        // existant"). Only a wrapper explicitly marked
+        // `data-cms-alt-prefill` (GallerySlot.astro's EMPTY-slot create
+        // form) ever gets this; an occupied slot's "Changer l'image"
+        // wrapper never carries the marker, so its already-set alt is
+        // never touched here. Only fills a field that's still empty, and
+        // never invents text the media itself doesn't have.
+        if (targetWrapper.dataset.cmsAltPrefill === "true") {
+          const form = targetWrapper.closest("form");
+          const altFrInput = form?.querySelector<HTMLInputElement>('input[name="altFr"]');
+          const altEnInput = form?.querySelector<HTMLInputElement>('input[name="altEn"]');
+          const mediaAltFr = option.dataset.mediaAltFr;
+          const mediaAltEn = option.dataset.mediaAltEn;
+          if (altFrInput && !altFrInput.value && mediaAltFr) altFrInput.value = mediaAltFr;
+          if (altEnInput && !altEnInput.value && mediaAltEn) altEnInput.value = mediaAltEn;
+        }
       }
       dialog.close();
     });
@@ -611,6 +660,47 @@ const editHref = withParams(currentPath, { lang: locale, mode: undefined });
   .cms-layout-picker__option--active {
     border-color: var(--color-accent-warm);
     color: #fff;
+  }
+
+  /* Phase 3 schematic layout thumbnail — see the picker markup above. */
+  .cms-layout-thumb {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    width: 100%;
+    height: 2.75rem;
+  }
+
+  .cms-layout-thumb__row {
+    flex: 1;
+    display: flex;
+    gap: 2px;
+  }
+
+  .cms-layout-thumb__cell {
+    flex: 1;
+    background: rgba(255, 255, 255, 0.35);
+    border-radius: 2px;
+  }
+
+  .cms-layout-thumb__row--centered {
+    justify-content: center;
+  }
+
+  .cms-layout-thumb__row--centered .cms-layout-thumb__cell {
+    flex: 0 0 60%;
+  }
+
+  .cms-layout-thumb__row--offset {
+    justify-content: flex-start;
+  }
+
+  .cms-layout-thumb__row--offset .cms-layout-thumb__cell {
+    flex: 0 0 70%;
+  }
+
+  .cms-layout-picker__option--active .cms-layout-thumb__cell {
+    background: var(--color-accent-warm);
   }
 
   .cms-layout-picker__label {

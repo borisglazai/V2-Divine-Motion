@@ -25,6 +25,21 @@ interface Props {
 }
 
 const { slots, meta, locale, redirectTo } = Astro.props;
+
+/**
+ * Éditeur visuel Phase 3 — Précédent/Suivant (Boris's brief §5) needs to
+ * know which occupied, published-backed entries sit at either end of the
+ * reorderable sequence so GallerySlot.astro never renders a dead-end
+ * control. This is exactly the flattened, in-order id list
+ * src/lib/admin/work-slot-actions.ts's moveWorkSlotAction itself computes
+ * server-side (same filter: skip empty slots and brand-new never-published
+ * items) — kept in sync by construction since both read from the same
+ * `items`/`meta` the page already fetched via
+ * work.listWorkItemsForAdminGallery.
+ */
+const reorderableIds = slots.flatMap((slot) => slot.entries).flatMap((entry) => (entry.item && !meta.get(entry.item.id)?.isNewDraft ? [entry.item.id] : []));
+const firstReorderableId = reorderableIds[0];
+const lastReorderableId = reorderableIds[reorderableIds.length - 1];
 ---
 
 <div class="travail-gallery-editor">
@@ -35,7 +50,14 @@ const { slots, meta, locale, redirectTo } = Astro.props;
         <div class:list={["travail-gallery-editor__block", `travail-gallery-editor__block--${modifier}`]}>
           {slot.entries.map((entry) => (
             <div class="travail-gallery-editor__item">
-              <GallerySlot entry={entry} meta={entry.item ? (meta.get(entry.item.id) ?? null) : null} locale={locale} redirectTo={redirectTo} />
+              <GallerySlot
+                entry={entry}
+                meta={entry.item ? (meta.get(entry.item.id) ?? null) : null}
+                locale={locale}
+                redirectTo={redirectTo}
+                isFirstReorderable={entry.item?.id === firstReorderableId}
+                isLastReorderable={entry.item?.id === lastReorderableId}
+              />
             </div>
           ))}
         </div>

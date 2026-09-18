@@ -82,7 +82,13 @@ describe("Travail gallery slots — occupied slot edits a draft, empty slot crea
     publishedId = published.data.publishedId;
 
     const newMediaId = await readyRightedMedia("media/phase2-slot-a-new.jpg");
-    const slotSave = await saveWorkSlotAction(db, publishedId, { mediaId: newMediaId, captionFr: "légende" }, REDIRECT, UPDATED_BY);
+    const slotSave = await saveWorkSlotAction(
+      db,
+      publishedId,
+      { mediaId: newMediaId, altFr: "alt fr", altEn: "alt en", captionFr: "légende" },
+      REDIRECT,
+      UPDATED_BY,
+    );
     assert.ok(!("notFound" in slotSave));
     if ("notFound" in slotSave) return;
     assert.match(slotSave.redirect, /flash=success/);

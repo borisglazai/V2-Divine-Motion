@@ -1,28 +1,45 @@
 ---
 /**
- * Éditeur visuel Phase 2 — the "template-driven editorial gallery
+ * Éditeur visuel Phase 2/3 — the "template-driven editorial gallery
  * builder" Boris's brief centers on: one slot of the chosen composition
  * (src/lib/work-gallery-layouts.ts), rendered admin-side in EXACTLY the
  * shape it'll have publicly (same ratio/orientation), with direct
- * in-place editing:
+ * in-place editing.
  *
- *  - OCCUPIED (entry.item set): "Changer l'image" (reuses EditableImage —
- *    same shared media picker <dialog> as every other editable image on
- *    this site) + an editable caption for the current locale, saved via
- *    its own small <form> pointed at /admin/site/travail/slot/save —
- *    never a redirect to /admin/work for this simple case (Boris's
- *    brief). "Publier"/FR/EN toggles appear once a draft is open, same
- *    rule as /admin/work/[id] just condensed.
+ * Phase 3 redesign (Boris's brief: "trop de champs toujours visibles ...
+ * un slot doit ressembler à une vraie zone de composition, pas à un
+ * formulaire"). Compact by default:
+ *
+ *  - OCCUPIED (entry.item set): the image (EditableImage — its own
+ *    full-surface hover/tap overlay already IS the "Changer l'image"
+ *    quick action, unchanged from Phase 2) + one low-key meta row
+ *    (ratio, publication state / "Masqué"). A single always-visible but
+ *    unobtrusive toolstrip carries the frequent actions — "Modifier"
+ *    (expands the compact panel below, same collapse pattern as
+ *    EditorToolbar.astro's mobile menu: full HTML always present,
+ *    server-rendered, one class toggle), "Précédent"/"Suivant" (Boris's
+ *    brief §5 — validated: NOT drag-and-drop) and "Retirer"/"Remettre"
+ *    (§4 — validated: `is_visible` toggle, draft-only, never touches R2
+ *    or deletes the row). Kept as a persistent small row rather than a
+ *    true hover-only reveal so keyboard and touch users get the exact
+ *    same access as a mouse hover would — hover-gated controls would
+ *    either be unreachable without a pointer or need a second "tap to
+ *    reveal" step Boris's §12 (mobile) explicitly wants to avoid.
+ *    Alt FR/EN, caption FR/EN, the focal point, and per-language publish
+ *    (§7) all move into that collapsible panel — advanced fields, not
+ *    permanently visible.
  *  - EMPTY (entry.item null): keeps its expected ratio/orientation
- *    visible (e.g. "16:9 — Paysage") with an "Ajouter une photo" action
- *    that collects alt FR/EN — REQUIRED, native browser validation,
- *    never pre-filled/invented (Boris's explicit instruction) — before
- *    creating the new work_item at this exact position.
+ *    visible (e.g. "16:9 — Paysage") with an "Ajouter une photo" action.
+ *    Alt/caption fields are hidden until a media is actually picked
+ *    (§3 — "jamais de champ alt avant sélection de l'image"); once
+ *    picked, alt FR/EN pre-fills from the chosen media's own alt when it
+ *    has one (EditorToolbar.astro's picker, client-side only, never
+ *    invented — §11, validated: creation-time only).
  *
  * Never reachable by a public visitor: only rendered from
- * src/pages/admin/site/travail.astro, itself behind src/middleware.ts's
- * Cloudflare Access gate — same trust boundary as every other
- * src/components/admin/** component.
+ * src/pages/admin/site/travail.astro (via WorkView.astro's `editable`
+ * branch), itself behind src/middleware.ts's Cloudflare Access gate —
+ * same trust boundary as every other src/components/admin/** component.
  */
 import type { Locale } from "@/i18n/routes";
 import type { AdminSlotEntry } from "@/lib/work-gallery-adapter";
@@ -36,109 +53,312 @@ interface Props {
   meta: AdminGalleryItemMeta | null;
   locale: Locale;
   redirectTo: string;
+  /**
+   * Éditeur visuel Phase 3 — Précédent/Suivant (Boris's brief §5): whether
+   * this occupied, published-backed item sits at either end of the
+   * reorderable sequence (src/lib/admin/work-slot-actions.ts's
+   * moveWorkSlotAction), so the editor never renders a dead-end control.
+   * Always false for an empty slot or a brand-new never-published item
+   * (neither is reorderable).
+   */
+  isFirstReorderable?: boolean;
+  isLastReorderable?: boolean;
 }
 
-const { entry, meta, locale, redirectTo } = Astro.props;
+const { entry, meta, locale, redirectTo, isFirstReorderable = false, isLastReorderable = false } = Astro.props;
 const ratioStyle = `aspect-ratio: ${entry.expectedShape.ratio.replace("/", " / ")};`;
+
+/** Éditeur visuel Phase 3 (Boris's brief §6) — one plain-language publication state, readable without opening /admin/work. */
+function statusLabel(): string {
+  if (meta?.isNewDraft) return "Brouillon (jamais publié)";
+  const frPublished = meta?.frStatus === "published";
+  const enPublished = meta?.enStatus === "published";
+  if (frPublished && enPublished) return "Publié FR + EN";
+  if (frPublished) return "Publié FR";
+  if (enPublished) return "Publié EN";
+  return "Brouillon";
+}
+
+const isVisible = entry.item ? entry.item.is_visible === 1 : true;
+const canReorder = entry.item !== null && !meta?.isNewDraft;
 ---
 
 {
   entry.item ? (
-    <div class="gallery-slot gallery-slot--occupied">
+    <div class="gallery-slot gallery-slot--occupied" data-gallery-slot>
       <form method="POST" action="/admin/site/travail/slot/save" data-cms-form class="gallery-slot__media-form">
         <input type="hidden" name="workItemId" value={entry.item.id} />
         <input type="hidden" name="redirect" value={redirectTo} />
-        <EditableImage
-          field="mediaId"
-          src={mediaFileUrl(entry.item.media_id)}
-          alt=""
-          mediaId={entry.item.media_id}
-          ratio={entry.expectedShape.ratio}
-          editable
-        />
-        <label class="gallery-slot__caption-label">
-          Légende ({locale.toUpperCase()})
-          <Editable field="caption" locale={locale} editable>
-            {(locale === "fr" ? entry.item.caption_fr : entry.item.caption_en) ?? ""}
-          </Editable>
-        </label>
-        <button type="submit" class="gallery-slot__save-btn">
-          Enregistrer l'emplacement
-        </button>
+        <input type="hidden" name="focalX" value={entry.item.focal_x} data-gallery-slot-focal-input="x" />
+        <input type="hidden" name="focalY" value={entry.item.focal_y} data-gallery-slot-focal-input="y" />
+
+        <div class="gallery-slot__preview">
+          <EditableImage
+            field="mediaId"
+            src={mediaFileUrl(entry.item.media_id)}
+            alt=""
+            mediaId={entry.item.media_id}
+            ratio={entry.expectedShape.ratio}
+            focalX={entry.item.focal_x}
+            focalY={entry.item.focal_y}
+            editable
+          />
+        </div>
+
+        <div class="gallery-slot__meta-row">
+          <span class="gallery-slot__ratio-tag">{entry.expectedShape.ratioLabel}</span>
+          <span class:list={["gallery-slot__status-tag", { "gallery-slot__status-tag--hidden": !isVisible }]}>
+            {!isVisible ? "Masqué" : statusLabel()}
+          </span>
+        </div>
+
+        <div class="gallery-slot__toolstrip">
+          <button type="button" class="gallery-slot__ghost-btn gallery-slot__ghost-btn--small" data-gallery-slot-panel-toggle aria-expanded="false">
+            Modifier
+          </button>
+        </div>
+
+        <div class="gallery-slot__panel" data-gallery-slot-panel>
+          <label class="gallery-slot__alt-label">
+            Texte alternatif FR (obligatoire)
+            <input type="text" name="altFr" required value={entry.item.alt_fr} />
+          </label>
+          <label class="gallery-slot__alt-label">
+            Texte alternatif EN (obligatoire)
+            <input type="text" name="altEn" required value={entry.item.alt_en} />
+          </label>
+          <label class="gallery-slot__caption-label">
+            Légende ({locale.toUpperCase()})
+            <Editable field="caption" locale={locale} editable>
+              {(locale === "fr" ? entry.item.caption_fr : entry.item.caption_en) ?? ""}
+            </Editable>
+          </label>
+
+          <div class="gallery-slot__focal-field">
+            <p class="gallery-slot__field-label">
+              Point de mise au point <span class="gallery-slot__hint">(cliquer dans l'image)</span>
+            </p>
+            <div class="gallery-slot__focal-preview" data-gallery-slot-focal-preview>
+              <img
+                src={mediaFileUrl(entry.item.media_id)}
+                alt=""
+                data-gallery-slot-focal-img
+                style={`object-position: ${entry.item.focal_x}% ${entry.item.focal_y}%;`}
+              />
+              <span class="gallery-slot__focal-marker" data-gallery-slot-focal-marker style={`left: ${entry.item.focal_x}%; top: ${entry.item.focal_y}%;`} />
+            </div>
+          </div>
+
+          <button type="submit" class="gallery-slot__save-btn">
+            Enregistrer l'emplacement
+          </button>
+
+          <div class="gallery-slot__publish-group">
+            {meta?.hasDraft && meta.draftId && (
+              <form method="POST" action="/admin/site/travail/slot/publish" class="gallery-slot__inline-form">
+                <input type="hidden" name="draftId" value={meta.draftId} />
+                <input type="hidden" name="redirect" value={redirectTo} />
+                <button type="submit" class="gallery-slot__ghost-btn gallery-slot__ghost-btn--small">
+                  Publier cet élément
+                </button>
+              </form>
+            )}
+            {!meta?.isNewDraft && meta?.frStatus !== null && meta?.frStatus !== undefined && (
+              <form method="POST" action="/admin/site/travail/slot/language-status" class="gallery-slot__inline-form">
+                <input type="hidden" name="publishedId" value={entry.item.id} />
+                <input type="hidden" name="locale" value="fr" />
+                <input type="hidden" name="status" value={meta.frStatus === "published" ? "draft" : "published"} />
+                <input type="hidden" name="redirect" value={redirectTo} />
+                <button type="submit" class="gallery-slot__ghost-btn gallery-slot__ghost-btn--small">
+                  {meta.frStatus === "published" ? "Dépublier FR" : "Publier FR"}
+                </button>
+              </form>
+            )}
+            {!meta?.isNewDraft && meta?.enStatus !== null && meta?.enStatus !== undefined && (
+              <form method="POST" action="/admin/site/travail/slot/language-status" class="gallery-slot__inline-form">
+                <input type="hidden" name="publishedId" value={entry.item.id} />
+                <input type="hidden" name="locale" value="en" />
+                <input type="hidden" name="status" value={meta.enStatus === "published" ? "draft" : "published"} />
+                <input type="hidden" name="redirect" value={redirectTo} />
+                <button type="submit" class="gallery-slot__ghost-btn gallery-slot__ghost-btn--small">
+                  {meta.enStatus === "published" ? "Dépublier EN" : "Publier EN"}
+                </button>
+              </form>
+            )}
+          </div>
+        </div>
       </form>
 
-      {meta?.hasDraft && meta.draftId && (
-        <form method="POST" action="/admin/site/travail/slot/publish" class="gallery-slot__inline-form">
-          <input type="hidden" name="draftId" value={meta.draftId} />
-          <input type="hidden" name="redirect" value={redirectTo} />
-          <button type="submit" class="gallery-slot__ghost-btn">
-            Publier cet élément
-          </button>
-        </form>
-      )}
+      <div class="gallery-slot__toolstrip gallery-slot__toolstrip--secondary">
+        {canReorder && !isFirstReorderable && (
+          <form method="POST" action="/admin/site/travail/slot/move" class="gallery-slot__inline-form">
+            <input type="hidden" name="workItemId" value={entry.item.id} />
+            <input type="hidden" name="direction" value="prev" />
+            <input type="hidden" name="redirect" value={redirectTo} />
+            <button type="submit" class="gallery-slot__ghost-btn gallery-slot__ghost-btn--small" aria-label="Déplacer cette photo vers la position précédente">
+              ← Précédent
+            </button>
+          </form>
+        )}
+        {canReorder && !isLastReorderable && (
+          <form method="POST" action="/admin/site/travail/slot/move" class="gallery-slot__inline-form">
+            <input type="hidden" name="workItemId" value={entry.item.id} />
+            <input type="hidden" name="direction" value="next" />
+            <input type="hidden" name="redirect" value={redirectTo} />
+            <button type="submit" class="gallery-slot__ghost-btn gallery-slot__ghost-btn--small" aria-label="Déplacer cette photo vers la position suivante">
+              Suivant →
+            </button>
+          </form>
+        )}
 
-      {!meta?.isNewDraft && meta?.frStatus !== null && meta?.frStatus !== undefined && (
-        <form method="POST" action="/admin/site/travail/slot/language-status" class="gallery-slot__inline-form">
-          <input type="hidden" name="publishedId" value={entry.item.id} />
-          <input type="hidden" name="locale" value="fr" />
-          <input type="hidden" name="status" value={meta.frStatus === "published" ? "draft" : "published"} />
-          <input type="hidden" name="redirect" value={redirectTo} />
-          <button type="submit" class="gallery-slot__ghost-btn gallery-slot__ghost-btn--small">
-            {meta.frStatus === "published" ? "Dépublier FR" : "Publier FR"}
-          </button>
-        </form>
-      )}
-      {!meta?.isNewDraft && meta?.enStatus !== null && meta?.enStatus !== undefined && (
-        <form method="POST" action="/admin/site/travail/slot/language-status" class="gallery-slot__inline-form">
-          <input type="hidden" name="publishedId" value={entry.item.id} />
-          <input type="hidden" name="locale" value="en" />
-          <input type="hidden" name="status" value={meta.enStatus === "published" ? "draft" : "published"} />
-          <input type="hidden" name="redirect" value={redirectTo} />
-          <button type="submit" class="gallery-slot__ghost-btn gallery-slot__ghost-btn--small">
-            {meta.enStatus === "published" ? "Dépublier EN" : "Publier EN"}
-          </button>
-        </form>
-      )}
+        {isVisible ? (
+          <form
+            method="POST"
+            action="/admin/site/travail/slot/visibility"
+            class="gallery-slot__inline-form"
+            data-confirm="Retirer cet élément de la galerie publique (après publication) ? Le média ne sera pas supprimé — vous pourrez le remettre à tout moment."
+          >
+            <input type="hidden" name="workItemId" value={entry.item.id} />
+            <input type="hidden" name="isVisible" value="0" />
+            <input type="hidden" name="redirect" value={redirectTo} />
+            <button type="submit" class="gallery-slot__ghost-btn gallery-slot__ghost-btn--small gallery-slot__ghost-btn--danger">
+              Retirer
+            </button>
+          </form>
+        ) : (
+          <form method="POST" action="/admin/site/travail/slot/visibility" class="gallery-slot__inline-form">
+            <input type="hidden" name="workItemId" value={entry.item.id} />
+            <input type="hidden" name="isVisible" value="1" />
+            <input type="hidden" name="redirect" value={redirectTo} />
+            <button type="submit" class="gallery-slot__ghost-btn gallery-slot__ghost-btn--small">
+              Remettre
+            </button>
+          </form>
+        )}
+      </div>
     </div>
   ) : (
-    <div class="gallery-slot gallery-slot--empty">
+    <div class="gallery-slot gallery-slot--empty" data-gallery-slot>
       <form method="POST" action="/admin/site/travail/slot/create" data-cms-form class="gallery-slot__create-form">
         <input type="hidden" name="position" value={entry.position} />
         <input type="hidden" name="ratio" value={entry.expectedShape.ratio} />
         <input type="hidden" name="redirect" value={redirectTo} />
 
-        <div class="gallery-slot__placeholder" style={ratioStyle} data-cms-media-field="mediaId" data-cms-media-id="">
+        <div
+          class="gallery-slot__placeholder"
+          style={ratioStyle}
+          data-cms-media-field="mediaId"
+          data-cms-media-id=""
+          data-cms-alt-prefill="true"
+        >
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" class="gallery-slot__placeholder-icon">
+            <rect x="3" y="3" width="18" height="18" rx="2" stroke="currentColor" stroke-width="1.3" />
+            <circle cx="8.5" cy="9" r="1.5" fill="currentColor" />
+            <path d="M3 16.5 8 12l3.5 3.5L16 11l5 6" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round" />
+          </svg>
           <span class="gallery-slot__placeholder-ratio">{entry.expectedShape.ratioLabel}</span>
           <button type="button" class="gallery-slot__pick-btn" data-cms-open-media-picker="mediaId">
-            Ajouter une photo
+            + Ajouter une photo
           </button>
           <span class="gallery-slot__placeholder-selected">Photo sélectionnée</span>
         </div>
 
-        <label class="gallery-slot__alt-label">
-          Texte alternatif FR (obligatoire)
-          <input type="text" name="altFr" required />
-        </label>
-        <label class="gallery-slot__alt-label">
-          Texte alternatif EN (obligatoire)
-          <input type="text" name="altEn" required />
-        </label>
-        <label class="gallery-slot__caption-input-label">
-          Légende FR (optionnelle)
-          <input type="text" name="captionFr" />
-        </label>
-        <label class="gallery-slot__caption-input-label">
-          Légende EN (optionnelle)
-          <input type="text" name="captionEn" />
-        </label>
+        <div class="gallery-slot__new-fields" data-gallery-slot-new-fields>
+          <label class="gallery-slot__alt-label">
+            Texte alternatif FR (obligatoire)
+            <input type="text" name="altFr" required />
+          </label>
+          <label class="gallery-slot__alt-label">
+            Texte alternatif EN (obligatoire)
+            <input type="text" name="altEn" required />
+          </label>
+          <label class="gallery-slot__caption-input-label">
+            Légende FR (optionnelle)
+            <input type="text" name="captionFr" />
+          </label>
+          <label class="gallery-slot__caption-input-label">
+            Légende EN (optionnelle)
+            <input type="text" name="captionEn" />
+          </label>
 
-        <button type="submit" class="gallery-slot__save-btn">
-          Créer l'élément (brouillon)
-        </button>
+          <button type="submit" class="gallery-slot__save-btn">
+            Créer l'élément (brouillon)
+          </button>
+        </div>
       </form>
     </div>
   )
 }
+
+<script>
+  // Éditeur visuel Phase 3 — "Modifier" panel collapse toggle, same pattern
+  // as EditorToolbar.astro's mobile menu (full HTML always server-rendered
+  // for no-JS save; a class toggle purely controls visibility). Scoped via
+  // the nearest `[data-gallery-slot]` ancestor rather than an id, since a
+  // page can render many slots at once.
+  document.querySelectorAll<HTMLButtonElement>("[data-gallery-slot-panel-toggle]").forEach((toggle) => {
+    const slot = toggle.closest<HTMLElement>("[data-gallery-slot]");
+    const panel = slot?.querySelector<HTMLElement>("[data-gallery-slot-panel]");
+    toggle.addEventListener("click", () => {
+      const expanded = toggle.getAttribute("aria-expanded") === "true";
+      toggle.setAttribute("aria-expanded", String(!expanded));
+      panel?.classList.toggle("gallery-slot__panel--expanded", !expanded);
+    });
+  });
+
+  // Éditeur visuel Phase 3 — empty slot (Boris's brief §3: "jamais de champ
+  // alt avant sélection de l'image"). The alt/caption fields stay hidden
+  // until a media is actually picked. EditorToolbar.astro's shared picker
+  // script is the thing that flips `data-cms-dirty` on the placeholder
+  // (it owns the dialog, this component doesn't); watching that attribute
+  // here keeps the two scripts decoupled instead of teaching the shared
+  // picker about this component's own field layout.
+  document.querySelectorAll<HTMLElement>(".gallery-slot__placeholder[data-cms-alt-prefill]").forEach((placeholder) => {
+    const form = placeholder.closest("form");
+    const fields = form?.querySelector<HTMLElement>("[data-gallery-slot-new-fields]");
+    if (!fields) return;
+    const sync = () => fields.classList.toggle("gallery-slot__new-fields--visible", placeholder.dataset.cmsDirty === "true");
+    sync();
+    new MutationObserver(sync).observe(placeholder, { attributes: true, attributeFilter: ["data-cms-dirty"] });
+  });
+
+  // Éditeur visuel Phase 3 — focal point (Boris's brief §10): click inside
+  // the small preview to set the point of interest, immediately visible
+  // (updates the same preview's own object-position) and written into the
+  // hidden focalX/focalY fields the media-form already submits.
+  document.querySelectorAll<HTMLElement>("[data-gallery-slot-focal-preview]").forEach((preview) => {
+    preview.addEventListener("click", (event) => {
+      const rect = preview.getBoundingClientRect();
+      const x = Math.round(Math.min(100, Math.max(0, ((event.clientX - rect.left) / rect.width) * 100)));
+      const y = Math.round(Math.min(100, Math.max(0, ((event.clientY - rect.top) / rect.height) * 100)));
+
+      const img = preview.querySelector<HTMLImageElement>("[data-gallery-slot-focal-img]");
+      if (img) img.style.objectPosition = `${x}% ${y}%`;
+      const marker = preview.querySelector<HTMLElement>("[data-gallery-slot-focal-marker]");
+      if (marker) {
+        marker.style.left = `${x}%`;
+        marker.style.top = `${y}%`;
+      }
+
+      const form = preview.closest("form");
+      const xInput = form?.querySelector<HTMLInputElement>('[data-gallery-slot-focal-input="x"]');
+      const yInput = form?.querySelector<HTMLInputElement>('[data-gallery-slot-focal-input="y"]');
+      if (xInput) xInput.value = String(x);
+      if (yInput) yInput.value = String(y);
+    });
+  });
+
+  // "Retirer" confirmation (Boris's brief §4: "exiger une confirmation
+  // avant l'action destructrice"). Purely a UX guard, not a security
+  // boundary — the action underneath only ever sets is_visible=0 on a
+  // draft (src/lib/admin/work-slot-actions.ts's setWorkSlotVisibilityAction),
+  // never deletes anything, so a no-JS submit is still fully safe.
+  document.querySelectorAll<HTMLFormElement>("form[data-confirm]").forEach((form) => {
+    form.addEventListener("submit", (event) => {
+      if (!confirm(form.dataset.confirm)) event.preventDefault();
+    });
+  });
+</script>
 
 <style>
   .gallery-slot {
@@ -153,6 +373,45 @@ const ratioStyle = `aspect-ratio: ${entry.expectedShape.ratio.replace("/", " / "
   .gallery-slot--occupied {
     border-style: solid;
     border-color: var(--color-border);
+  }
+
+  .gallery-slot__meta-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-2);
+    font-size: 0.75rem;
+    color: var(--color-text-secondary);
+  }
+
+  .gallery-slot__status-tag--hidden {
+    color: var(--color-accent-warm);
+    font-weight: 600;
+  }
+
+  .gallery-slot__toolstrip {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+  }
+
+  .gallery-slot__toolstrip--secondary {
+    border-top: 1px dashed rgba(255, 255, 255, 0.12);
+    padding-top: var(--space-2);
+  }
+
+  /* Phase 3 — collapsible "Modifier" panel, same always-in-DOM /
+     class-toggle pattern as EditorToolbar.astro's mobile menu. */
+  .gallery-slot__panel {
+    display: none;
+    flex-direction: column;
+    gap: var(--space-2);
+    padding-top: var(--space-2);
+    border-top: 1px dashed rgba(255, 255, 255, 0.12);
+  }
+
+  .gallery-slot__panel--expanded {
+    display: flex;
   }
 
   .gallery-slot__caption-label,
@@ -176,6 +435,51 @@ const ratioStyle = `aspect-ratio: ${entry.expectedShape.ratio.replace("/", " / "
     color: var(--color-text-primary);
   }
 
+  .gallery-slot__field-label {
+    margin: 0;
+    font-size: var(--text-small);
+    color: var(--color-text-secondary);
+  }
+
+  .gallery-slot__hint {
+    opacity: 0.7;
+    font-size: 0.8em;
+  }
+
+  .gallery-slot__focal-preview {
+    position: relative;
+    max-width: 12rem;
+    cursor: crosshair;
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+    border: var(--border-width) solid var(--color-border);
+  }
+
+  .gallery-slot__focal-preview img {
+    display: block;
+    width: 100%;
+    aspect-ratio: 3 / 2;
+    object-fit: cover;
+  }
+
+  .gallery-slot__focal-marker {
+    position: absolute;
+    width: 0.75rem;
+    height: 0.75rem;
+    margin-left: -0.375rem;
+    margin-top: -0.375rem;
+    border-radius: 50%;
+    border: 2px solid var(--color-accent-warm);
+    background: rgba(20, 18, 16, 0.5);
+    pointer-events: none;
+  }
+
+  .gallery-slot__publish-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+  }
+
   .gallery-slot__save-btn,
   .gallery-slot__ghost-btn {
     font-family: var(--font-sans);
@@ -195,6 +499,11 @@ const ratioStyle = `aspect-ratio: ${entry.expectedShape.ratio.replace("/", " / "
     min-height: 2rem;
   }
 
+  .gallery-slot__ghost-btn--danger {
+    color: var(--color-accent-warm);
+    border-color: var(--color-accent-warm);
+  }
+
   .gallery-slot__inline-form {
     display: inline-block;
   }
@@ -211,6 +520,12 @@ const ratioStyle = `aspect-ratio: ${entry.expectedShape.ratio.replace("/", " / "
     border-radius: var(--radius-sm);
     color: var(--color-text-secondary);
     text-align: center;
+  }
+
+  .gallery-slot__placeholder-icon {
+    width: 1.75rem;
+    height: 1.75rem;
+    opacity: 0.6;
   }
 
   .gallery-slot__placeholder-ratio {
@@ -240,5 +555,17 @@ const ratioStyle = `aspect-ratio: ${entry.expectedShape.ratio.replace("/", " / "
 
   .gallery-slot__placeholder[data-cms-dirty="true"] .gallery-slot__pick-btn {
     display: none;
+  }
+
+  /* Phase 3 (Boris's brief §3) — alt/caption stay hidden until a media is
+     actually picked, toggled by this component's own script above. */
+  .gallery-slot__new-fields {
+    display: none;
+    flex-direction: column;
+    gap: var(--space-2);
+  }
+
+  .gallery-slot__new-fields--visible {
+    display: flex;
   }
 </style>
