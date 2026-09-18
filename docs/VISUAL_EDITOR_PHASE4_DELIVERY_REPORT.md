@@ -112,7 +112,7 @@ Byte-identical public geometry (verified, §2.7). Admin fidelity materially impr
 
 ## 8. Commit
 
-(recorded after this report is committed — see the final message for the hash)
+`5391176` — "Visual Editor Phase 4: typecheck fix, test determinism, accessibility, admin design system, GalleryBlockFrame" — on branch `validation/staging-cloudflare`. Verified: no `migrations/` file touched, no D1 schema change.
 
 ## 9. Plan de validation staging
 
