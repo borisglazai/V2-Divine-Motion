@@ -1,0 +1,76 @@
+/*
+  Admin design system — minimal (Phase 4, Boris's audit §3/§4). NOT a UI
+  library: a small set of primitives layered on top of the existing global
+  tokens (tokens.css), for the concepts that were genuinely duplicated
+  across the Visual Editor's own chrome — a real, concrete finding from
+  the audit: EditorToolbar.astro's `.cms-toolbar__primary`/`.cms-toolbar__
+  ghost` and GallerySlot.astro's `.gallery-slot__save-btn`/`.gallery-slot__
+  ghost-btn` were two independently-styled implementations of the exact
+  same "admin button" concept, with slightly different padding/min-height/
+  border values and no shared hover/focus feedback on one of the two.
+
+  Deliberately scoped to the Visual Editor for this phase (Boris: "Migre
+  en priorité les composants du Visual Editor... ne fais pas un refactor
+  massif de 17 composants"). Imported only by AdminLayout.astro (the
+  structured CMS: /admin/work, /admin/media, /admin/services,
+  /admin/testimonials, dashboard) and EditorToolbar.astro (the visual
+  editor chrome under /admin/site/**) — never by BaseLayout.astro, so
+  none of this ever reaches a public page's CSS bundle. The rest of the
+  admin surface (WorkItemForm.astro, ServiceForm.astro, media pages, …)
+  keeps its own local button/badge styles for now — each is free to adopt
+  these same classes later without anything here changing shape.
+*/
+
+.admin-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-family: var(--font-sans);
+  font-size: var(--text-small);
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  padding: var(--space-2) var(--space-4);
+  min-height: 2.5rem;
+  border: var(--border-width) solid var(--color-border);
+  background: transparent;
+  color: var(--color-text-primary);
+  text-decoration: none;
+}
+
+.admin-btn:hover,
+.admin-btn:focus-visible {
+  opacity: 0.85;
+}
+
+.admin-btn--primary {
+  background: var(--color-accent-warm);
+  color: #1a1512;
+  border: none;
+  font-weight: 600;
+}
+
+.admin-btn--danger {
+  color: var(--color-accent-warm);
+  border-color: var(--color-accent-warm);
+}
+
+.admin-btn--small {
+  font-size: 0.8em;
+  padding: var(--space-1) var(--space-3);
+  min-height: 2rem;
+}
+
+/* Discreet inline status label (Brouillon / Publié FR / Publié EN /
+   Masqué, …) — plain text, no pill background, matching the
+   understated look Boris explicitly validated for the Travail slot
+   status row in Phase 3. `--warn` is the one state that needs to stand
+   out (Masqué). */
+.admin-badge {
+  font-size: 0.75rem;
+  color: var(--color-text-secondary);
+}
+
+.admin-badge--warn {
+  color: var(--color-accent-warm);
+  font-weight: 600;
+}

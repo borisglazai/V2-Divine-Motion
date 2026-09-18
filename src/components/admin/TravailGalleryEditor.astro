@@ -1,21 +1,26 @@
 ---
 /**
- * Éditeur visuel Phase 2 — renders one AdminGallerySlot (from
- * src/lib/work-gallery-adapter.ts's buildAdminGallerySlots) per composition
- * slot, each containing its GallerySlot.astro entries (one per image the
- * slot's shape expects). An APPROXIMATION of the public composition's
- * proportions (full/centered/large/offset/duo/trio — same vocabulary as
- * src/components/WorkGallery.astro), not a byte-identical reuse of that
- * component's own scoped styles (Astro scopes <style> per-component, so
- * WorkGallery.astro's CSS classes don't apply to markup rendered here) —
- * close enough for the admin to recognize which composition slot they're
- * editing, not pixel parity with the public page (a known Phase 2 limit,
- * see the final report).
+ * Éditeur visuel Phase 2/4 — renders one AdminGallerySlot (from
+ * src/lib/work-gallery-adapter.ts's buildAdminGallerySlots) per
+ * composition slot, each containing its GallerySlot.astro entries (one
+ * per image the slot's shape expects).
+ *
+ * Phase 4 (Boris's audit §5, validated with guardrails): the geometry
+ * (margins/widths/flex-splits per breakpoint) now comes from
+ * `GalleryBlockFrame.astro` — the SAME component WorkGallery.astro uses
+ * for the public page — instead of this file's own approximate
+ * `.travail-gallery-editor__block--*` CSS. `reveal` is deliberately never
+ * passed here (unlike WorkGallery.astro): an admin editing their gallery
+ * needs every slot visible immediately, not faded in on scroll.
+ * GallerySlot.astro itself is untouched — only what wraps it changed.
  */
 import type { Locale } from "@/i18n/routes";
 import type { AdminGallerySlot } from "@/lib/work-gallery-adapter";
 import type { AdminGalleryItemMeta } from "@/lib/db/work";
+import type { GallerySlotShape } from "@/lib/work-gallery-layouts";
+import type { GalleryBlockShape } from "@/lib/gallery-blocks";
 import GallerySlot from "@/components/admin/GallerySlot.astro";
+import GalleryBlockFrame from "@/components/GalleryBlockFrame.astro";
 
 interface Props {
   slots: AdminGallerySlot[];
@@ -25,6 +30,13 @@ interface Props {
 }
 
 const { slots, meta, locale, redirectTo } = Astro.props;
+
+/** `GallerySlotShape` (discriminant `block`) -> `GalleryBlockShape` (discriminant `type`) — see gallery-blocks.ts's doc comment for why the public-facing name is the one both sides map onto. */
+function toBlockShape(shape: GallerySlotShape): GalleryBlockShape {
+  if (shape.block === "offset") return { type: "offset", side: shape.side };
+  if (shape.block === "duo") return { type: "duo", split: shape.split };
+  return { type: shape.block };
+}
 
 /**
  * Éditeur visuel Phase 3 — Précédent/Suivant (Boris's brief §5) needs to
@@ -45,22 +57,31 @@ const lastReorderableId = reorderableIds[reorderableIds.length - 1];
 <div class="travail-gallery-editor">
   {
     slots.map((slot) => {
-      const modifier = slot.shape.block === "offset" ? `offset offset--${slot.shape.side}` : slot.shape.block;
+      const entries = slot.entries;
+      const slotProps = (entry: (typeof entries)[number]) => ({
+        entry,
+        meta: entry.item ? (meta.get(entry.item.id) ?? null) : null,
+        locale,
+        redirectTo,
+        isFirstReorderable: entry.item?.id === firstReorderableId,
+        isLastReorderable: entry.item?.id === lastReorderableId,
+      });
       return (
-        <div class:list={["travail-gallery-editor__block", `travail-gallery-editor__block--${modifier}`]}>
-          {slot.entries.map((entry) => (
-            <div class="travail-gallery-editor__item">
-              <GallerySlot
-                entry={entry}
-                meta={entry.item ? (meta.get(entry.item.id) ?? null) : null}
-                locale={locale}
-                redirectTo={redirectTo}
-                isFirstReorderable={entry.item?.id === firstReorderableId}
-                isLastReorderable={entry.item?.id === lastReorderableId}
-              />
-            </div>
-          ))}
-        </div>
+        <GalleryBlockFrame shape={toBlockShape(slot.shape)}>
+          <Fragment slot="item-0">
+            <GallerySlot {...slotProps(entries[0])} />
+          </Fragment>
+          {entries[1] && (
+            <Fragment slot="item-1">
+              <GallerySlot {...slotProps(entries[1])} />
+            </Fragment>
+          )}
+          {entries[2] && (
+            <Fragment slot="item-2">
+              <GallerySlot {...slotProps(entries[2])} />
+            </Fragment>
+          )}
+        </GalleryBlockFrame>
       );
     })
   }
@@ -71,42 +92,5 @@ const lastReorderableId = reorderableIds[reorderableIds.length - 1];
     display: flex;
     flex-direction: column;
     gap: var(--space-8);
-  }
-
-  .travail-gallery-editor__block {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-4);
-    width: 100%;
-  }
-
-  .travail-gallery-editor__block--full,
-  .travail-gallery-editor__block--large {
-    max-width: 68rem;
-    margin-inline: auto;
-  }
-
-  .travail-gallery-editor__block--centered {
-    max-width: 44rem;
-    margin-inline: auto;
-  }
-
-  .travail-gallery-editor__block--offset {
-    max-width: 52rem;
-  }
-
-  .travail-gallery-editor__block--offset.offset--right {
-    margin-inline-start: auto;
-  }
-
-  .travail-gallery-editor__block--duo,
-  .travail-gallery-editor__block--trio {
-    flex-direction: row;
-    flex-wrap: wrap;
-  }
-
-  .travail-gallery-editor__block--duo .travail-gallery-editor__item,
-  .travail-gallery-editor__block--trio .travail-gallery-editor__item {
-    flex: 1 1 16rem;
   }
 </style>

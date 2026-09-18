@@ -27,6 +27,11 @@ import type { Locale } from "@/i18n/routes";
 import type { MediaRow, WorkGalleryLayout } from "@/lib/db/types";
 import { mediaFileUrl } from "@/lib/admin/media-preview";
 import { GALLERY_LAYOUTS } from "@/lib/work-gallery-layouts";
+// Phase 4 §3 — the small shared admin button/badge primitives. Imported
+// here (not BaseLayout.astro, which also serves public pages) so this
+// never reaches the public CSS bundle: this component is only ever
+// rendered as admin chrome (see the file header).
+import "@/styles/admin.css";
 
 export type SiteEditorPageId = "home" | "services" | "travail" | "about" | "contact";
 export type SiteEditorMode = "edit" | "preview";
@@ -139,15 +144,15 @@ const editHref = withParams(currentPath, { lang: locale, mode: undefined });
   {
     available && mode === "edit" && (
       <div class="cms-toolbar__actions">
-        <button type="submit" form="cms-editor-form" class="cms-toolbar__primary">
+        <button type="submit" form="cms-editor-form" class="admin-btn admin-btn--primary">
           Enregistrer
         </button>
-        <a href={previewHref} class="cms-toolbar__ghost">
+        <a href={previewHref} class="admin-btn">
           Aperçu
         </a>
         {hasDraft && publishAction && (
           <form method="POST" action={publishAction} class="cms-toolbar__inline-form">
-            <button type="submit" class="cms-toolbar__ghost">
+            <button type="submit" class="admin-btn">
               Publier
             </button>
           </form>
@@ -159,7 +164,7 @@ const editHref = withParams(currentPath, { lang: locale, mode: undefined });
   {
     available && mode === "preview" && (
       <div class="cms-toolbar__actions">
-        <a href={editHref} class="cms-toolbar__ghost">
+        <a href={editHref} class="admin-btn">
           Retour à l'édition
         </a>
       </div>
@@ -172,14 +177,14 @@ const editHref = withParams(currentPath, { lang: locale, mode: undefined });
         <form method="POST" action={languageStatusAction} class="cms-toolbar__inline-form">
           <input type="hidden" name="locale" value="fr" />
           <input type="hidden" name="status" value={frStatus === "published" ? "draft" : "published"} />
-          <button type="submit" class="cms-toolbar__ghost cms-toolbar__ghost--small">
+          <button type="submit" class="admin-btn admin-btn--small">
             {frStatus === "published" ? "Dépublier FR" : "Publier FR"}
           </button>
         </form>
         <form method="POST" action={languageStatusAction} class="cms-toolbar__inline-form">
           <input type="hidden" name="locale" value="en" />
           <input type="hidden" name="status" value={enStatus === "published" ? "draft" : "published"} />
-          <button type="submit" class="cms-toolbar__ghost cms-toolbar__ghost--small">
+          <button type="submit" class="admin-btn admin-btn--small">
             {enStatus === "published" ? "Dépublier EN" : "Publier EN"}
           </button>
         </form>
@@ -312,7 +317,24 @@ const editHref = withParams(currentPath, { lang: locale, mode: undefined });
     return input;
   }
 
-  function fieldsRootFor(form: HTMLFormElement): ParentNode {
+  // Phase 4 typecheck fix — deliberately NOT typed `ParentNode`. Cloudflare's
+  // generated `worker-configuration.d.ts` (included project-wide by
+  // tsconfig.json for D1/R2 types) declares its OWN global `interface
+  // Element` for the server-side HTMLRewriter API, whose `append(content:
+  // string | ReadableStream | Response, ...)` gets merged by TypeScript
+  // into the DOM's own global `Element` (same declared name, same global
+  // scope) — the merged type's `append` no longer matches what
+  // `ParentNode.append` expects, so `HTMLFormElement`/`Element` stop being
+  // assignable to `ParentNode` anywhere in the project. `fieldsRootFor`'s
+  // result only ever calls `.querySelectorAll` (see below) — never
+  // `.append` — so this local interface names exactly the contract this
+  // function actually needs, sidestepping the collision instead of casting
+  // past it.
+  interface FieldsRoot {
+    querySelectorAll<T extends Element>(selectors: string): NodeListOf<T>;
+  }
+
+  function fieldsRootFor(form: HTMLFormElement): FieldsRoot {
     if (form.id) {
       const external = document.querySelector(`[data-cms-fields-for="${CSS.escape(form.id)}"]`);
       if (external) return external;
@@ -500,8 +522,7 @@ const editHref = withParams(currentPath, { lang: locale, mode: undefined });
       margin-inline-start: 0;
     }
 
-    .cms-toolbar__primary,
-    .cms-toolbar__ghost {
+    .cms-toolbar .admin-btn {
       min-height: 2.25rem;
       padding: var(--space-1) var(--space-3);
       font-size: 0.85em;
@@ -565,44 +586,10 @@ const editHref = withParams(currentPath, { lang: locale, mode: undefined });
     display: inline-block;
   }
 
-  .cms-toolbar__primary,
-  .cms-toolbar__ghost {
-    font-family: var(--font-sans);
-    font-size: var(--text-small);
-    cursor: pointer;
-    border-radius: var(--radius-sm);
-    padding: var(--space-2) var(--space-4);
-    min-height: 2.5rem;
-  }
-
-  .cms-toolbar__primary {
-    background: var(--color-accent-warm);
-    color: #1a1512;
-    border: none;
-    font-weight: 600;
-  }
-
-  .cms-toolbar__ghost {
-    background: transparent;
-    color: #f2ede6;
-    border: 1px solid rgba(255, 255, 255, 0.3);
-    text-decoration: none;
-    display: inline-flex;
-    align-items: center;
-  }
-
-  .cms-toolbar__ghost--small {
-    font-size: 0.8em;
-    padding: var(--space-1) var(--space-3);
-    min-height: 2rem;
-  }
-
-  .cms-toolbar__ghost:hover,
-  .cms-toolbar__ghost:focus-visible,
-  .cms-toolbar__primary:hover,
-  .cms-toolbar__primary:focus-visible {
-    opacity: 0.85;
-  }
+  /* Phase 4 §3 — button visuals (base/primary/small/hover-focus) now come
+     from the shared .admin-btn primitives (src/styles/admin.css); only
+     the mobile-only compact override below stays local to this
+     component. */
 
   .cms-toolbar__quit {
     color: rgba(242, 237, 230, 0.6);

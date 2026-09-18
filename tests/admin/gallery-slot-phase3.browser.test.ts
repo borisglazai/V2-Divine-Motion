@@ -220,17 +220,53 @@ test("focal point: clicking inside the preview updates the hidden fields and the
   assert.equal(markerLeft, `${x}%`, "the marker must move immediately, before any save");
 });
 
+test("Phase 4: focal point is keyboard-operable — arrows nudge fine, Shift+arrow nudges coarse, bounded 0-100", async () => {
+  await page.goto(TRAVAIL_EDITOR_URL, { waitUntil: "networkidle" });
+  const slot = seedItemSlot();
+
+  await slot.locator("[data-gallery-slot-panel-toggle]").click();
+  const focalPreview = slot.locator("[data-gallery-slot-focal-preview]");
+  await focalPreview.waitFor({ state: "visible" });
+
+  // A real Tab stop, not just clickable.
+  assert.equal(await focalPreview.getAttribute("tabindex"), "0");
+  assert.equal(await focalPreview.getAttribute("role"), "group");
+
+  await focalPreview.focus();
+  const xInput = slot.locator('[data-gallery-slot-focal-input="x"]');
+  const yInput = slot.locator('[data-gallery-slot-focal-input="y"]');
+  const startX = Number(await xInput.inputValue());
+  const startY = Number(await yInput.inputValue());
+
+  await page.keyboard.press("ArrowRight");
+  assert.equal(Number(await xInput.inputValue()), Math.min(100, startX + 2), "a plain arrow key must nudge by the fine step (2)");
+
+  await page.keyboard.press("Shift+ArrowDown");
+  assert.equal(Number(await yInput.inputValue()), Math.min(100, startY + 10), "Shift+arrow must nudge by the coarse step (10)");
+
+  // Bounds: push far past 100 and confirm it clamps, never exceeds.
+  for (let i = 0; i < 12; i++) await page.keyboard.press("Shift+ArrowRight");
+  assert.equal(Number(await xInput.inputValue()), 100, "focalX must clamp at 100, never overflow");
+
+  for (let i = 0; i < 12; i++) await page.keyboard.press("Shift+ArrowLeft");
+  assert.equal(Number(await xInput.inputValue()), 0, "focalX must clamp at 0, never go negative");
+});
+
 test("keyboard: focusing 'Modifier' and pressing Enter expands the panel", async () => {
   await page.goto(TRAVAIL_EDITOR_URL, { waitUntil: "networkidle" });
   const slot = seedItemSlot();
   const toggle = slot.locator("[data-gallery-slot-panel-toggle]");
+  const panel = slot.locator("[data-gallery-slot-panel]");
 
   assert.equal(await toggle.getAttribute("aria-expanded"), "false");
+  const panelId = await panel.getAttribute("id");
+  assert.ok(panelId, "the panel must have an id for aria-controls to reference");
+  assert.equal(await toggle.getAttribute("aria-controls"), panelId, "Phase 4: the toggle must point aria-controls at the panel's real id");
+
   await toggle.focus();
   await page.keyboard.press("Enter");
 
   assert.equal(await toggle.getAttribute("aria-expanded"), "true", "keyboard activation must expand the panel exactly like a click");
-  const panel = slot.locator("[data-gallery-slot-panel]");
   assert.equal(await panel.evaluate((el) => getComputedStyle(el).display), "flex");
 });
 

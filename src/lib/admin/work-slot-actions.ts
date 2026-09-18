@@ -107,7 +107,7 @@ export async function saveWorkSlotAction(
   );
   if (!updated.ok) return { redirect: withFlash(redirectTo, "error", adminErrorMessage(updated.error)) };
 
-  return { redirect: withFlash(redirectTo, "success", "Emplacement enregistré (brouillon).") };
+  return { redirect: withFlash(redirectTo, "success", "Modifications enregistrées (brouillon).") };
 }
 
 /**
@@ -138,9 +138,13 @@ export async function setWorkSlotVisibilityAction(
     redirect: withFlash(
       redirectTo,
       "success",
+      // Phase 4 §7 — Boris's exact validated terminology ("Élément
+      // masqué." / "Élément remis en ligne."), with the workflow context
+      // kept alongside per "garde le contexte utile": this is a draft
+      // change, not yet public.
       isVisible
-        ? "Élément remis (brouillon) — publiez-le pour le rendre à nouveau visible."
-        : "Élément retiré (brouillon) — le média n'est pas supprimé ; publiez pour appliquer au site public.",
+        ? "Élément remis en ligne (brouillon) — publiez pour appliquer au site public."
+        : "Élément masqué (brouillon) — le média n'est pas supprimé ; publiez pour appliquer au site public.",
     ),
   };
 }
@@ -241,7 +245,10 @@ export async function setWorkSlotLanguageStatusAction(
   }
   const result = await work.setWorkItemLanguageStatus(db, publishedId, locale, status, updatedBy);
   if (!result.ok) return { redirect: withFlash(redirectTo, "error", adminErrorMessage(result.error)) };
-  return { redirect: withFlash(redirectTo, "success", `Statut ${locale.toUpperCase()} mis à jour.`) };
+  // Phase 4 §7 — Boris's validated terminology ("Publié en français." /
+  // "Publié en anglais."), extended symmetrically to the unpublish case.
+  const localeLabel = locale === "fr" ? "français" : "anglais";
+  return { redirect: withFlash(redirectTo, "success", status === "published" ? `Publié en ${localeLabel}.` : `Dépublié en ${localeLabel}.`) };
 }
 
 export interface NewWorkSlotFields {

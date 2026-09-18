@@ -24,7 +24,7 @@ import { listSnapshots } from "../../src/lib/db/snapshots";
 let db: D1Database;
 
 before(async () => {
-  db = await resetTestDb();
+  db = await resetTestDb(".wrangler-test-dal");
   seedTestDb();
 });
 

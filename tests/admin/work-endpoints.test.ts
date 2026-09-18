@@ -43,7 +43,7 @@ let db: D1Database;
 const UPDATED_BY = "cms-test-admin@divinemotion.ca";
 
 before(async () => {
-  db = await resetTestDb();
+  db = await resetTestDb(".wrangler-test-work-endpoints");
   seedTestDb();
 });
 

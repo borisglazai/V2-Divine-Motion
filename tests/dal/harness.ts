@@ -9,19 +9,25 @@
  * tests/db/helpers.mjs's approach in Brief 010) while still exercising a
  * genuine D1 engine, not node:sqlite against a bare file.
  *
- * Uses its own isolated persistence directory (.wrangler-test-dal/),
- * separate from both the developer's seeded dev DB (.wrangler/) and the
- * Brief 010 invariant suite's directory (.wrangler-test/) — the two
- * suites never interfere with each other and can run concurrently.
+ * Each caller uses its OWN isolated persistence directory, separate from
+ * the developer's seeded dev DB (.wrangler/), from the Brief 010 invariant
+ * suite's directory (.wrangler-test/), and from every other caller of this
+ * harness.
  *
- * `resetTestDb()` takes an optional `dirName` (Validation Brief 014S) so
- * that test files invoked TOGETHER in a single `node --test a.ts b.ts`
- * command — which Node runs as concurrent child processes, one per file —
- * don't race on the same on-disk directory (`rm -rf` in one process vs.
- * `wrangler d1 migrations apply` in another producing "table already
- * exists"). Every existing caller keeps the shared default directory
- * (they've each only ever run alone or alongside files that don't touch
- * this harness), so this is additive, not a behavior change for them.
+ * Phase 4 (Boris's audit §2/§3) — `resetTestDb(dirName)` REQUIRES its
+ * argument; there is no shared default anymore. There used to be one
+ * (`.wrangler-test-dal/`), silently reused by every caller that didn't
+ * pass a name — harmless as long as no two of those callers ever ran at
+ * the same time, but nothing enforced that. Two `wrangler d1` subprocess
+ * trees hitting the same on-disk SQLite directory concurrently (`rm -rf`
+ * in one process racing `wrangler d1 migrations apply`/`execute` in
+ * another) is exactly the failure mode observed when
+ * `db:test:invariants` was accidentally run twice at once during Phase 3
+ * closure — real flakiness, just self-inflicted rather than a CI property.
+ * Making `dirName` mandatory turns "don't run these two scripts at the
+ * same time" from an implicit convention into a compile-time necessity:
+ * every caller now names its own directory, so there is no shared default
+ * left to collide on.
  */
 import { execFileSync } from "node:child_process";
 import { existsSync, rmSync } from "node:fs";
@@ -30,8 +36,7 @@ import { fileURLToPath } from "node:url";
 import { Miniflare, convertV4MiniflareOptions } from "miniflare";
 
 const repoRoot = path.resolve(fileURLToPath(import.meta.url), "../../..");
-const DEFAULT_PERSIST_DIR_NAME = ".wrangler-test-dal";
-let currentPersistDir = path.join(repoRoot, DEFAULT_PERSIST_DIR_NAME);
+let currentPersistDir = path.join(repoRoot, ".wrangler-test-dal");
 // Matches wrangler.toml's [[d1_databases]] database_id for the default
 // (non-`--env`) binding — the local D1 SQLite file is keyed by this id,
 // not by the binding name, so this must match exactly what
@@ -46,12 +51,11 @@ let mf: Miniflare | undefined;
 
 /**
  * Wipes the isolated persistence dir, re-applies migrations/ via the real
- * Wrangler CLI, and returns a live D1Database. Pass `dirName` to use a
- * directory other than the shared default — required when this file's
- * caller runs in the same `node --test` invocation as another file that
- * also calls `resetTestDb()` (see the file header comment).
+ * Wrangler CLI, and returns a live D1Database. `dirName` is mandatory —
+ * always a name unique to the calling test file (see the file header
+ * comment: no shared default left to collide on).
  */
-export async function resetTestDb(dirName: string = DEFAULT_PERSIST_DIR_NAME): Promise<D1Database> {
+export async function resetTestDb(dirName: string): Promise<D1Database> {
   if (mf) {
     await mf.dispose();
     mf = undefined;

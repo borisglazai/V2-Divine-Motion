@@ -1,0 +1,272 @@
+---
+/**
+ * Visual Editor Phase 4 (Boris's audit §5, validated with guardrails) —
+ * the composition GEOMETRY only (which block shape, its margins/widths/
+ * flex-splits at each breakpoint), extracted verbatim from
+ * WorkGallery.astro so the public gallery and the Travail admin editor
+ * (TravailGalleryEditor.astro/GallerySlot.astro) share the exact same
+ * proportions instead of maintaining two independent approximations.
+ *
+ * Strictly presentational, per Boris's explicit guardrail: knows the
+ * block shape (`full`/`centered`/`large`/`offset`/`duo`/`trio`, `split`/
+ * `side`) and nothing else — no D1, no draft/publish, no admin, no media
+ * picker, no media rights, no CMS buttons. Content is injected entirely
+ * through named slots (`item-0`, `item-1`, `item-2` for duo/trio's two or
+ * three positions); this component never renders an `<img>` or an
+ * `<ImageFrame>` itself.
+ *
+ * `reveal` (default false) opts into the `data-reveal` scroll-fade-in
+ * behavior (src/components/ScrollReveal.astro / src/styles/global.css) —
+ * WorkGallery.astro passes `reveal` to keep the exact public behavior
+ * unchanged; TravailGalleryEditor.astro deliberately never does (an admin
+ * editing their gallery needs every slot visible immediately, not faded
+ * in on scroll — a new dependency the admin editor never had before).
+ *
+ * DOM/CSS parity with the public page (the actual guardrail this component
+ * exists to satisfy) is verified by
+ * tests/public/gallery-block-frame.test.ts (structural — the exact same
+ * class names/nesting `WorkGallery.astro` produced before this
+ * extraction) and a manual before/after geometry diff across both real
+ * layouts at 3 breakpoints (see the Phase 4 delivery report).
+ */
+import type { GalleryBlockShape } from "@/lib/gallery-blocks";
+
+interface Props {
+  shape: GalleryBlockShape;
+  reveal?: boolean;
+}
+
+const { shape, reveal = false } = Astro.props;
+const revealAttrs = reveal ? { "data-reveal": true } : {};
+---
+
+{
+  shape.type === "duo" ? (
+    <div class={`gallery-block gallery-block--duo gallery-block--split-${shape.split ?? "even"}`} {...revealAttrs}>
+      <div class="gallery-block__duo-item">
+        <slot name="item-0" />
+      </div>
+      <div class="gallery-block__duo-item">
+        <slot name="item-1" />
+      </div>
+    </div>
+  ) : shape.type === "trio" ? (
+    <div class="gallery-block gallery-block--trio" {...revealAttrs}>
+      <div class="gallery-block__trio-item">
+        <slot name="item-0" />
+      </div>
+      <div class="gallery-block__trio-item">
+        <slot name="item-1" />
+      </div>
+      <div class="gallery-block__trio-item">
+        <slot name="item-2" />
+      </div>
+    </div>
+  ) : (
+    <div
+      class:list={[
+        "gallery-block",
+        shape.type === "offset" ? `gallery-block--offset offset--${shape.side}` : `gallery-block--${shape.type}`,
+      ]}
+      {...revealAttrs}
+    >
+      <slot name="item-0" />
+    </div>
+  )
+}
+
+<style>
+  .gallery-block {
+    width: 100%;
+  }
+
+  /* FULL — the tightest rhythm: images that read as one continuous
+     wide sweep, close to their neighbours. */
+  .gallery-block--full {
+    margin-block: var(--space-4);
+  }
+
+  /* CENTERED / LARGE — the generous-breathing-room moments. */
+  .gallery-block--centered {
+    margin-block: var(--space-16);
+    margin-inline: auto;
+  }
+
+  .gallery-block--large {
+    margin-block: var(--space-20);
+    margin-inline: auto;
+  }
+
+  /* OFFSET — shifted, asymmetric margins, never centered. */
+  .gallery-block--offset {
+    margin-block: var(--space-8);
+  }
+
+  /* DUO — a close pair. */
+  .gallery-block--duo {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+    margin-block: var(--space-6);
+  }
+
+  .gallery-block__duo-item {
+    flex: 1;
+  }
+
+  /* TRIO — a close row of 3, same rhythm as DUO. */
+  .gallery-block--trio {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+    margin-block: var(--space-6);
+  }
+
+  .gallery-block__trio-item {
+    flex: 1;
+  }
+
+  @media (min-width: 375px) {
+    /* mobile-only inset/full-bleed variation so the sequence doesn't
+       read as one monotonous column (Brief 003, section 19) — full
+       bleeds past the container gutter, others stay inset. */
+    .gallery-block--full {
+      margin-inline: calc(-1 * var(--container-gutter));
+      width: calc(100% + 2 * var(--container-gutter));
+    }
+
+    .gallery-block--centered {
+      width: 84%;
+    }
+
+    .gallery-block--large {
+      width: 94%;
+    }
+
+    .gallery-block--offset.offset--left {
+      padding-right: var(--space-8);
+    }
+
+    .gallery-block--offset.offset--right {
+      padding-left: var(--space-8);
+    }
+
+    .gallery-block--duo {
+      flex-direction: column;
+    }
+
+    .gallery-block--duo .gallery-block__duo-item:first-child {
+      width: 88%;
+    }
+
+    .gallery-block--duo .gallery-block__duo-item:last-child {
+      width: 88%;
+      margin-left: auto;
+    }
+
+    .gallery-block--trio {
+      flex-direction: column;
+    }
+
+    .gallery-block--trio .gallery-block__trio-item {
+      width: 88%;
+    }
+
+    .gallery-block--trio .gallery-block__trio-item:nth-child(2) {
+      margin-left: auto;
+    }
+  }
+
+  @media (min-width: 768px) {
+    /* Tablet: duo becomes a real 2-column row (never stacked), offsets
+       shrink but stay asymmetric, full-bleed goes back to the
+       container's own width (section 18). */
+    .gallery-block--full {
+      margin-inline: 0;
+      width: 100%;
+    }
+
+    .gallery-block--centered {
+      width: 62%;
+    }
+
+    .gallery-block--large {
+      width: 76%;
+    }
+
+    .gallery-block--offset {
+      width: 78%;
+    }
+
+    .gallery-block--offset.offset--left {
+      margin-right: auto;
+      padding-right: 0;
+    }
+
+    .gallery-block--offset.offset--right {
+      margin-left: auto;
+      padding-left: 0;
+    }
+
+    .gallery-block--duo {
+      flex-direction: row;
+      gap: var(--space-6);
+    }
+
+    .gallery-block--duo .gallery-block__duo-item {
+      width: auto;
+      margin: 0;
+    }
+
+    .gallery-block--split-left-heavy .gallery-block__duo-item:first-child {
+      flex: 7;
+    }
+    .gallery-block--split-left-heavy .gallery-block__duo-item:last-child {
+      flex: 5;
+    }
+
+    .gallery-block--split-right-heavy .gallery-block__duo-item:first-child {
+      flex: 5;
+    }
+    .gallery-block--split-right-heavy .gallery-block__duo-item:last-child {
+      flex: 7;
+    }
+
+    .gallery-block--split-even .gallery-block__duo-item {
+      flex: 1;
+    }
+
+    .gallery-block--trio {
+      flex-direction: row;
+      gap: var(--space-6);
+    }
+
+    .gallery-block--trio .gallery-block__trio-item {
+      width: auto;
+      margin: 0;
+      flex: 1;
+    }
+  }
+
+  @media (min-width: 1024px) {
+    .gallery-block--centered {
+      width: 56%;
+    }
+
+    .gallery-block--large {
+      width: 68%;
+    }
+
+    .gallery-block--offset {
+      width: 70%;
+    }
+
+    .gallery-block--duo {
+      gap: var(--space-8);
+    }
+
+    .gallery-block--trio {
+      gap: var(--space-8);
+    }
+  }
+</style>

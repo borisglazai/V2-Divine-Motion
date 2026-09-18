@@ -79,7 +79,9 @@ const { activeId, email } = Astro.props;
 
   .admin-mobile-nav__email {
     margin-top: auto;
-    color: var(--color-text-discreet);
+    /* Phase 4 §7 — see AdminTopbar.astro's identical fix: --color-text-discreet
+       is below AA at this size, --color-text-secondary is conformant. */
+    color: var(--color-text-secondary);
     font-size: var(--text-small);
   }
 

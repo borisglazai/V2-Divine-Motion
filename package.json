@@ -29,7 +29,7 @@
     "test:storage": "node --import tsx --test tests/storage/keys.test.ts tests/storage/image-inspect.test.ts tests/storage/r2-presign.test.ts",
     "test:media": "node --import tsx --test tests/admin/media-actions.test.ts",
     "test:public": "node --import tsx --test tests/public/work-gallery-adapter.test.ts tests/public/public-media.test.ts tests/public/work-view.test.ts tests/public/service-layout.test.ts tests/public/services-view.test.ts tests/public/testimonials-view.test.ts tests/public/site-editor-view.test.ts tests/public/site-editor-phase2.test.ts tests/public/site-editor-phase3.test.ts",
-    "test:browser": "node --import tsx --test --test-concurrency=1 tests/admin/layout-picker.browser.test.ts tests/admin/contact-form-isolation.browser.test.ts tests/admin/gallery-slot-phase3.browser.test.ts"
+    "test:browser": "node --import tsx --test --test-concurrency=1 tests/admin/layout-picker.browser.test.ts tests/admin/contact-form-isolation.browser.test.ts tests/admin/gallery-slot-phase3.browser.test.ts tests/public/gallery-block-frame.browser.test.ts"
   },
   "dependencies": {
     "@astrojs/cloudflare": "^14.3.1",

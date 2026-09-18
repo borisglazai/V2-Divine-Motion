@@ -59,7 +59,10 @@ const { title, email } = Astro.props;
 
   .admin-topbar__email {
     display: none;
-    color: var(--color-text-discreet);
+    /* Phase 4 §7 — was --color-text-discreet (≈4.04:1), below AA at this
+       size (docs/ACCESSIBILITY.md explicitly warns against exactly this
+       usage). --color-text-secondary is AA-conformant (≈7.1:1). */
+    color: var(--color-text-secondary);
     font-size: var(--text-small);
   }
 

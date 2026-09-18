@@ -46,7 +46,7 @@ const FAKE_CREDENTIALS: R2Credentials = {
 };
 
 before(async () => {
-  db = await resetTestDb();
+  db = await resetTestDb(".wrangler-test-media-actions");
   seedTestDb();
   bucket = await getTestBucket();
 });

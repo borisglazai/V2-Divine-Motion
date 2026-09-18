@@ -50,3 +50,25 @@ export type GalleryBlock =
       type: "trio";
       images: [GalleryImage, GalleryImage, GalleryImage];
     };
+
+/**
+ * Visual Editor Phase 4 (Boris's audit §5, validated with guardrails) —
+ * the SHAPE half of `GalleryBlock`, with the image payload stripped out.
+ * This is what `GalleryBlockFrame.astro` actually needs to reproduce the
+ * public composition's exact geometry (margins/widths/flex-splits per
+ * breakpoint — see WorkGallery.astro's CSS, moved there unchanged) for
+ * BOTH the public gallery (WorkGallery.astro, passing a real `GalleryBlock`
+ * — its extra image fields are simply ignored by structural typing) and
+ * the admin editor (TravailGalleryEditor.astro, mapping its own
+ * `GallerySlotShape` — src/lib/work-gallery-layouts.ts — onto this same
+ * shape vocabulary, `block` renamed to `type`). Never the other way
+ * around: this file (public-facing, no admin concept) is the one shape
+ * vocabulary both sides map onto, not something owned by the admin layer.
+ */
+export type GalleryBlockShape =
+  | { type: "full" }
+  | { type: "centered" }
+  | { type: "large" }
+  | { type: "offset"; side: "left" | "right" }
+  | { type: "duo"; split?: "even" | "left-heavy" | "right-heavy" }
+  | { type: "trio" };
