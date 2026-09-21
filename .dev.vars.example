@@ -10,3 +10,13 @@
 # `wrangler secret put` instead — never a file.
 R2_ACCESS_KEY_ID=
 R2_SECRET_ACCESS_KEY=
+
+# Contact form (Production Readiness Step 1) — RESEND_API_KEY is a real
+# secret, never committed (see wrangler.toml's "Contact form" comment).
+# Without it, sendContactEmail's real Resend call fails closed (a 401);
+# every other part of the flow (validation, Turnstile with the committed
+# test keys, rate limiting) still works locally without this. Get a key at
+# https://resend.com/api-keys — the default `onboarding@resend.dev` sender
+# already configured in wrangler.toml's local [vars] works with any Resend
+# account, no domain verification needed, for local testing only.
+RESEND_API_KEY=

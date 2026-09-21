@@ -29,6 +29,19 @@ database_id = "00000000-0000-0000-0000-000000000000"
 migrations_dir = "migrations"
 
 # ---------------------------------------------------------------------------
+# RATE_LIMIT KV — Contact form's lightweight per-IP rate limiting
+# (src/lib/contact/rate-limit.ts / env.ts have the full reasoning). A NEW,
+# dedicated binding — deliberately NOT the existing SESSION binding below,
+# which is reserved by the Cloudflare adapter's own built-in Astro session
+# feature (confirmed via `astro dev`'s own startup log; nothing in src/
+# reads SESSION directly). Local: same placeholder-id convention as D1/R2
+# above (works fine against Miniflare's local KV emulation).
+# ---------------------------------------------------------------------------
+[[kv_namespaces]]
+binding = "RATE_LIMIT"
+id = "00000000000000000000000000000000"
+
+# ---------------------------------------------------------------------------
 # Staging — NOT provisioned by this repo. `wrangler d1 create
 # divine-motion-v2-staging` must be run once, manually, against the real
 # Cloudflare account, and its real database_id pasted into
@@ -41,6 +54,18 @@ migrations_dir = "migrations"
 [[env.staging.kv_namespaces]]
 binding = "SESSION"
 id = "e3be4efe99f745acb0b2ac8be5a230d2"
+[[env.staging.kv_namespaces]]
+# NOT provisioned by this repo — `wrangler kv namespace create RATE_LIMIT
+# --env staging` must be run once, manually, against the real Cloudflare
+# account, and its real id pasted in below (replacing this placeholder)
+# before staging rate limiting actually activates. Until then,
+# getRateLimitKv() returns this placeholder-bound KVNamespace object, which
+# IS a real, usable (if not yet meaningfully isolated) KV namespace under
+# Miniflare-style bindings — but see this brief's delivery report for why
+# this specific id must still be replaced with a real one before relying on
+# it in staging (a placeholder id is not guaranteed stable/dedicated).
+binding = "RATE_LIMIT"
+id = "REPLACE_WITH_REAL_RATE_LIMIT_KV_NAMESPACE_ID"
 [[env.staging.d1_databases]]
 binding = "DB"
 database_name = "divine-motion-v2-staging"
@@ -94,20 +119,52 @@ migrations_dir = "migrations"
 # R2_ACCESS_KEY_ID`/`R2_SECRET_ACCESS_KEY` (`--env staging` for staging) —
 # see docs/DEPLOYMENT.md "R2 credentials".
 # ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Contact form — Production Readiness Step 1 (src/lib/contact/env.ts has the
+# full reasoning; this is the short version).
+#
+# TURNSTILE_SITE_KEY is not a secret (embedded in the public HTML, same
+# category as CF_ACCESS_TEAM_DOMAIN) — committed here. TURNSTILE_SECRET_KEY
+# IS a real secret in staging/production (`wrangler secret put
+# TURNSTILE_SECRET_KEY`, deliberately absent from this file there). The one
+# exception is LOCAL: both local values below are Cloudflare's own
+# publicly-documented "always passes" testing pair
+# (https://developers.cloudflare.com/turnstile/troubleshooting/testing/) —
+# meant to be embedded in code for exactly this purpose, not a real secret —
+# so local dev and the browser test suite can submit the form and get a real
+# Turnstile verification round-trip without any real Cloudflare account.
+#
+# CONTACT_FROM_EMAIL is not a secret (an address, same category as
+# R2_BUCKET_NAME) — explicit and environment-specific rather than derived
+# from site_settings.contact_email (the RECIPIENT, a different concern).
+# The staging value is a placeholder: Resend only accepts sending from a
+# domain it has verified, so this must be replaced with a real
+# Resend-verified address (see docs/DEPLOYMENT.md / this brief's delivery
+# report "actions manuelles restantes").
+#
+# RESEND_API_KEY is a real secret in every environment, never here — same
+# pattern as R2_ACCESS_KEY_ID (local: `.dev.vars`; staging: `wrangler secret
+# put RESEND_API_KEY --env staging`).
+# ---------------------------------------------------------------------------
 [vars]
 CF_ACCESS_TEAM_DOMAIN = "REPLACE_WITH_REAL_TEAM_DOMAIN.cloudflareaccess.com"
 CF_ACCESS_AUD = "REPLACE_WITH_REAL_ACCESS_APPLICATION_AUD_TAG"
 R2_ACCOUNT_ID = "REPLACE_WITH_REAL_R2_ACCOUNT_ID"
 R2_BUCKET_NAME = "divine-motion-v2-media-local"
+TURNSTILE_SITE_KEY = "1x00000000000000000000AA"
+TURNSTILE_SECRET_KEY = "1x0000000000000000000000000000AA"
+CONTACT_FROM_EMAIL = "onboarding@resend.dev"
 
 [env.staging.vars]
 CF_ACCESS_TEAM_DOMAIN = "red-dream-564c.cloudflareaccess.com"
 CF_ACCESS_AUD = "7ab5d217f898c03df1ff97fa49f66faf482e0477b49df03b2207379ad161bdd3"
 R2_ACCOUNT_ID = "80690274479b4a7f525a8d4c768404bf"
 R2_BUCKET_NAME = "divine-motion-v2-media-staging"
+TURNSTILE_SITE_KEY = "REPLACE_WITH_REAL_TURNSTILE_SITE_KEY"
+CONTACT_FROM_EMAIL = "REPLACE_WITH_REAL_RESEND_VERIFIED_SENDER"
 
-# Production Access/R2 config is deliberately NOT declared here — same
-# reasoning as the D1 section above. Set via Cloudflare dashboard
+# Production Access/R2/Contact config is deliberately NOT declared here —
+# same reasoning as the D1 section above. Set via Cloudflare dashboard
 # environment variables / secrets at deploy time, never in this file.
 
 # ---------------------------------------------------------------------------

@@ -1,6 +1,91 @@
 ---
+/**
+ * Real Contact form endpoint (Production Readiness — Step 1: Contact
+ * Form). This page IS the POST target (no separate `.ts` endpoint):
+ * success redirects (POST/Redirect/GET, flash-carried — safe, no PII in
+ * a generic success message); every failure re-renders this same page
+ * in place with the submitted values and errors, so nothing gets
+ * encoded into the URL (see src/lib/contact/submit-action.ts's own doc
+ * comment on why redirect-with-flash isn't used for errors).
+ */
 export const prerender = false;
 import ContactView from "@/components/pages/ContactView.astro";
+import { getDb } from "@/lib/db/client";
+import { getSiteSettings } from "@/lib/db/settings";
+import { getTurnstileConfig, getResendConfig, getRateLimitKv } from "@/lib/contact/env";
+import { handleContactSubmission, type ContactSubmissionResult } from "@/lib/contact/submit-action";
+import { withFlash, readFlash } from "@/lib/admin/flash";
+import { getPath } from "@/i18n/routes";
+import { t } from "@/i18n/ui";
+import type { ContactFormErrors } from "@/lib/contact/validation";
+
+const locale = "fr" as const;
+const errorsCopy = t(locale).contactForm.errors;
+
+function genericErrorFor(outcome: Exclude<ContactSubmissionResult["outcome"], "success" | "validation_error">): string {
+  switch (outcome) {
+    case "turnstile_error":
+      return errorsCopy.turnstile;
+    case "rate_limited":
+      return errorsCopy.rateLimited;
+    case "email_error":
+      return errorsCopy.emailProvider;
+    case "config_error":
+      return errorsCopy.generic;
+  }
+}
+
+let formErrors: ContactFormErrors | undefined;
+let formValues: Record<string, string> | undefined;
+let formError: string | undefined;
+
+if (Astro.request.method === "POST") {
+  const formData = await Astro.request.formData();
+
+  let recipientEmail: string | null = null;
+  try {
+    recipientEmail = (await getSiteSettings(getDb()))?.contact_email ?? null;
+  } catch (err) {
+    console.error("contact.astro: site_settings D1 read failed", err instanceof Error ? err.message : err);
+  }
+
+  const result = await handleContactSubmission(formData, locale, Astro.clientAddress, {
+    turnstileConfig: getTurnstileConfig(),
+    resendConfig: getResendConfig(),
+    recipientEmail,
+    rateLimitKv: getRateLimitKv(),
+  });
+
+  if (result.outcome === "success") {
+    return Astro.redirect(withFlash(getPath("contact", locale), "success", t(locale).contactForm.success));
+  }
+
+  if (result.outcome === "validation_error") {
+    formErrors = result.errors;
+  } else {
+    formError = genericErrorFor(result.outcome);
+  }
+
+  formValues = {
+    name: String(formData.get("name") ?? ""),
+    email: String(formData.get("email") ?? ""),
+    phone: String(formData.get("phone") ?? ""),
+    serviceType: String(formData.get("serviceType") ?? ""),
+    date: String(formData.get("date") ?? ""),
+    location: String(formData.get("location") ?? ""),
+    message: String(formData.get("message") ?? ""),
+  };
+}
+
+const flash = readFlash(Astro.url);
+const turnstileSiteKey = getTurnstileConfig()?.siteKey ?? null;
 ---
 
-<ContactView locale="fr" />
+<ContactView
+  locale="fr"
+  formErrors={formErrors}
+  formValues={formValues}
+  formError={formError}
+  flash={flash}
+  turnstileSiteKey={turnstileSiteKey}
+/>

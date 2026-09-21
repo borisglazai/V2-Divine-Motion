@@ -6,6 +6,7 @@ import Heading from "@/components/Heading.astro";
 import Text from "@/components/Text.astro";
 import PrimaryButton from "@/components/PrimaryButton.astro";
 import Editable from "@/components/admin/Editable.astro";
+import FlashMessage from "@/components/admin/FlashMessage.astro";
 import ScrollReveal from "@/components/ScrollReveal.astro";
 import { getPath, type Locale } from "@/i18n/routes";
 import { contactMock } from "@/data/mock/contact";
@@ -13,24 +14,47 @@ import { t } from "@/i18n/ui";
 import { getDb } from "@/lib/db/client";
 import * as pages from "@/lib/db/pages";
 import type { ContactContentRow } from "@/lib/db/types";
+import type { ContactFormErrors } from "@/lib/contact/validation";
+import type { Flash } from "@/lib/admin/flash";
+
+interface ContactFormValues {
+  name?: string;
+  email?: string;
+  phone?: string;
+  serviceType?: string;
+  date?: string;
+  location?: string;
+  message?: string;
+}
 
 interface Props {
   locale: Locale;
   /**
    * Éditeur visuel Phase 2 — same 3-mode convention as the other 4 pages.
    * Editorial content only (Boris's brief: hero title/intro, details
-   * label, closing note) — the contact form itself (already visual-only,
-   * no real submit) is never touched by this phase.
+   * label, closing note) — the CONTENT around the form is what this mode
+   * affects; the form itself (Production Readiness — Step 1) is wired to
+   * a real POST/Turnstile/email backend only when `mode === "public"`,
+   * so the admin editor's Contact page keeps its pre-existing,
+   * non-submitting button (no regression).
    */
   mode?: "public" | "edit" | "preview";
   saveAction?: string;
+  /** Public form POST handling (src/pages/contact.astro / en/contact.astro) — all optional so the admin editor call site above needs no changes. */
+  formErrors?: ContactFormErrors;
+  formValues?: ContactFormValues;
+  formError?: string;
+  flash?: Flash | null;
+  turnstileSiteKey?: string | null;
 }
 
-const { locale, mode = "public", saveAction } = Astro.props;
+const { locale, mode = "public", saveAction, formErrors, formValues, formError, flash = null, turnstileSiteKey = null } = Astro.props;
 const editable = mode === "edit";
+const isPublic = mode === "public";
 const copy = t(locale);
 const form = copy.contactForm;
 const content = contactMock[locale];
+const fv = formValues ?? {};
 
 let contactRow: ContactContentRow | null = null;
 try {
@@ -74,37 +98,49 @@ const closingNote = langLive ? (locale === "fr" ? contactRow!.closing_note_fr : 
 
   <Section spacing="tight">
     <Container class="contact-form-wrap">
-      <form class="contact-form" aria-labelledby="contact-heading" data-reveal>
+      {isPublic && <FlashMessage flash={flash} />}
+
+      <form class="contact-form" aria-labelledby="contact-heading" data-reveal method={isPublic ? "POST" : undefined} novalidate={isPublic}>
+        {formError && (
+          <div class="contact-form__field contact-form__field--full">
+            <p class="contact-form__form-error" role="alert">{formError}</p>
+          </div>
+        )}
+
         <div class="contact-form__field">
           <label for="name">{form.name}</label>
-          <input type="text" id="name" name="name" autocomplete="name" required />
+          <input type="text" id="name" name="name" autocomplete="name" required value={fv.name ?? ""} aria-invalid={formErrors?.name ? "true" : undefined} aria-describedby={formErrors?.name ? "name-error" : undefined} />
+          {formErrors?.name && <p class="contact-form__field-error" id="name-error" role="alert">{formErrors.name}</p>}
         </div>
 
         <div class="contact-form__field">
           <label for="email">{form.email}</label>
-          <input type="email" id="email" name="email" autocomplete="email" required />
+          <input type="email" id="email" name="email" autocomplete="email" required value={fv.email ?? ""} aria-invalid={formErrors?.email ? "true" : undefined} aria-describedby={formErrors?.email ? "email-error" : undefined} />
+          {formErrors?.email && <p class="contact-form__field-error" id="email-error" role="alert">{formErrors.email}</p>}
         </div>
 
         <div class="contact-form__field">
           <label for="phone">{form.phone}</label>
-          <input type="tel" id="phone" name="phone" autocomplete="tel" />
+          <input type="tel" id="phone" name="phone" autocomplete="tel" value={fv.phone ?? ""} />
         </div>
 
         <div class="contact-form__field">
           <label for="serviceType">{form.serviceType}</label>
-          <select id="serviceType" name="serviceType" required>
-            {form.serviceTypeOptions.map((option) => <option value={option}>{option}</option>)}
+          <select id="serviceType" name="serviceType" required aria-invalid={formErrors?.serviceType ? "true" : undefined} aria-describedby={formErrors?.serviceType ? "serviceType-error" : undefined}>
+            <option value="" selected={!fv.serviceType} disabled hidden></option>
+            {form.serviceTypeOptions.map((option) => <option value={option} selected={fv.serviceType === option}>{option}</option>)}
           </select>
+          {formErrors?.serviceType && <p class="contact-form__field-error" id="serviceType-error" role="alert">{formErrors.serviceType}</p>}
         </div>
 
         <div class="contact-form__field">
           <label for="date">{form.date}</label>
-          <input type="date" id="date" name="date" />
+          <input type="date" id="date" name="date" value={fv.date ?? ""} />
         </div>
 
         <div class="contact-form__field">
           <label for="location">{form.location}</label>
-          <input type="text" id="location" name="location" />
+          <input type="text" id="location" name="location" value={fv.location ?? ""} />
         </div>
 
         <div class="contact-form__field contact-form__field--full">
@@ -115,7 +151,10 @@ const closingNote = langLive ? (locale === "fr" ? contactRow!.closing_note_fr : 
             rows="6"
             required
             placeholder={form.messagePlaceholder}
-          ></textarea>
+            aria-invalid={formErrors?.message ? "true" : undefined}
+            aria-describedby={formErrors?.message ? "message-error" : undefined}
+          >{fv.message ?? ""}</textarea>
+          {formErrors?.message && <p class="contact-form__field-error" id="message-error" role="alert">{formErrors.message}</p>}
         </div>
 
         <div class="contact-form__field contact-form__field--full">
@@ -125,13 +164,30 @@ const closingNote = langLive ? (locale === "fr" ? contactRow!.closing_note_fr : 
           </Text>
         </div>
 
+        {isPublic && turnstileSiteKey && (
+          <div class="contact-form__field contact-form__field--full">
+            <span class="contact-form__turnstile-label">{form.turnstileLabel}</span>
+            <div class="cf-turnstile" data-sitekey={turnstileSiteKey}></div>
+          </div>
+        )}
+
         <div class="contact-form__field contact-form__field--full">
-          <!-- No `type="submit"` — PrimaryButton defaults to type="button",
-               so this can never trigger a real form submission (section
-               10/26: visual only, no backend, no fake success message). -->
-          <PrimaryButton>{form.submit}</PrimaryButton>
+          {
+            isPublic ? (
+              // Real submission (Production Readiness — Step 1): PrimaryButton's
+              // `type` prop is set to "submit" explicitly here only — every
+              // other call site (incl. the admin editor's Contact page below)
+              // keeps the default type="button", so nothing else can trigger a
+              // submission.
+              <PrimaryButton type="submit">{form.submit}</PrimaryButton>
+            ) : (
+              <PrimaryButton>{form.submit}</PrimaryButton>
+            )
+          }
         </div>
       </form>
+
+      {isPublic && turnstileSiteKey && <script is:inline src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>}
     </Container>
   </Section>
 
@@ -215,6 +271,36 @@ const closingNote = langLive ? (locale === "fr" ? contactRow!.closing_note_fr : 
     font-family: var(--font-sans);
     font-size: var(--text-small);
     color: var(--color-text-secondary);
+  }
+
+  .contact-form__field-error {
+    font-family: var(--font-sans);
+    font-size: var(--text-small);
+    color: #c2554b;
+  }
+
+  .contact-form__form-error {
+    font-family: var(--font-sans);
+    font-size: var(--text-small);
+    color: var(--color-text-primary);
+    background: color-mix(in srgb, #c2554b 12%, transparent);
+    border: var(--border-width) solid #c2554b;
+    border-radius: var(--radius-md);
+    padding: var(--space-4);
+  }
+
+  .contact-form__turnstile-label {
+    display: block;
+    font-family: var(--font-sans);
+    font-size: var(--text-small);
+    color: var(--color-text-secondary);
+    margin-bottom: var(--space-2);
+  }
+
+  input[aria-invalid="true"],
+  select[aria-invalid="true"],
+  textarea[aria-invalid="true"] {
+    border-color: #c2554b;
   }
 
   input,

@@ -63,6 +63,7 @@ export const privacyMock: Record<Locale, PrivacyContent> = {
         title: "Conservation",
         paragraphs: [
           "Les renseignements sont conservés seulement aussi longtemps que nécessaire pour répondre à la demande ou satisfaire les obligations applicables.",
+          "Le contenu du formulaire de contact (nom, courriel, téléphone, type de prestation, date, lieu, message) n'est pas conservé dans la base de données du site : il est transmis une seule fois, par courriel, à Divine Motion.",
         ],
       },
       {
@@ -70,7 +71,8 @@ export const privacyMock: Record<Locale, PrivacyContent> = {
         title: "Partage",
         paragraphs: [
           "Divine Motion ne vend pas les renseignements personnels.",
-          "Les informations peuvent être traitées par des fournisseurs techniques nécessaires au fonctionnement du site ou de nos communications.",
+          "Le formulaire de contact utilise Cloudflare Turnstile pour limiter les soumissions automatisées (anti-pourriel) : au moment de l'envoi, Cloudflare vérifie que la soumission provient d'une personne réelle.",
+          "Le contenu de votre message est transmis à Resend, notre fournisseur de courriel transactionnel, uniquement pour l'acheminer par courriel à Divine Motion.",
         ],
       },
       {
@@ -138,6 +140,7 @@ export const privacyMock: Record<Locale, PrivacyContent> = {
         title: "Retention",
         paragraphs: [
           "Information is kept only for as long as needed to respond to your request or meet applicable obligations.",
+          "The contact form's content (name, email, phone, type of service, date, location, message) is not stored in the site's database: it is sent once, by email, to Divine Motion.",
         ],
       },
       {
@@ -145,7 +148,8 @@ export const privacyMock: Record<Locale, PrivacyContent> = {
         title: "Sharing",
         paragraphs: [
           "Divine Motion does not sell personal information.",
-          "Information may be processed by technical providers necessary to run the site or our communications.",
+          "The contact form uses Cloudflare Turnstile to limit automated submissions (anti-spam): when you submit, Cloudflare verifies that the submission comes from a real person.",
+          "Your message's content is sent to Resend, our transactional email provider, solely to deliver it by email to Divine Motion.",
         ],
       },
       {

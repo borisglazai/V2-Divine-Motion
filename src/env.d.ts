@@ -24,14 +24,22 @@ declare namespace App {
 // `export const env: Cloudflare.Env`), but the bare global `Env` is used
 // elsewhere in that same generated file — merging into both keeps every
 // reference consistent regardless of which one a given API uses.
+// TURNSTILE_SECRET_KEY / RESEND_API_KEY (Production Readiness Step 1 —
+// Contact form) are real secrets, same reasoning and same hand-declaration
+// as R2_ACCESS_KEY_ID/R2_SECRET_ACCESS_KEY above — see
+// src/lib/contact/env.ts for how they're read (fail-closed when unset).
 interface Env {
   R2_ACCESS_KEY_ID?: string;
   R2_SECRET_ACCESS_KEY?: string;
+  TURNSTILE_SECRET_KEY?: string;
+  RESEND_API_KEY?: string;
 }
 
 declare namespace Cloudflare {
   interface Env {
     R2_ACCESS_KEY_ID?: string;
     R2_SECRET_ACCESS_KEY?: string;
+    TURNSTILE_SECRET_KEY?: string;
+    RESEND_API_KEY?: string;
   }
 }

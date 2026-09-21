@@ -107,6 +107,19 @@ jobs:
       - name: Éditeur visuel (site editor) tests
         run: npm run test:cms:site-editor
 
+      # Contact form (Production Readiness — Step 1). Pure (no D1/network):
+      # parseContactForm's unit tests, plus handleContactSubmission's
+      # integration tests against a stubbed `fetchImpl` (see
+      # src/lib/contact/submit-action.ts / tests/contact/submit-action.test.ts's
+      # own doc comments) — proves the "no email sent if validation/Turnstile
+      # fails" guarantees without ever calling the real Cloudflare/Resend
+      # APIs. The real-browser success-path test lives in test:browser
+      # below (tests/public/contact-form.browser.test.ts) and needs
+      # CONTACT_FORM_E2E_RESEND_API_KEY to run beyond its always-on
+      # validation-error checks — see that file's own doc comment.
+      - name: Contact form tests
+        run: npm run test:contact
+
       # Two real-browser regression suites (Playwright, not `node --test` +
       # `fetch()`): Travail's gallery-layout picker (client-side JS/CSS
       # state a plain HTTP request can't exercise — see
