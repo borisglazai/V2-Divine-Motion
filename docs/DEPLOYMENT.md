@@ -162,6 +162,23 @@ Le tableau de bord Cloudflare Workers Builds désigne la branche connectée comm
 
 Workers Observability est activée sur le Worker `v2-divine-motion` (activée par défaut côté plateforme Cloudflare pour les nouveaux Workers) et validée par du trafic réel pendant la validation Contact Step 1 (voir `docs/REAL_STAGING_VALIDATION_REPORT_CONTACT_STEP1.md`). `wrangler.toml` ne déclare pas de bloc `[observability]` explicite — non nécessaire, l'activation par défaut suffit ; à documenter explicitement ici si une configuration non-défaut (sampling rate, etc.) devient un jour nécessaire.
 
+### Rollback staging
+
+**Non exécuté à ce jour** — documenté ici pour être prêt si un déploiement staging s'avère défectueux. Le rollback est une action manuelle, jamais automatisée.
+
+**Rollback du code (Worker)** :
+
+- **Via le tableau de bord Cloudflare** (méthode privilégiée, cohérente avec le chemin de déploiement réel) : Workers & Pages → `v2-divine-motion` → Deployments → sélectionner la version précédente connue-bonne → Rollback. Promotion immédiate sur toutes les routes du Worker ; les 100 dernières versions publiées restent disponibles.
+- **Via Wrangler, si nécessaire** (ex. accès dashboard indisponible) : `npx wrangler rollback --env staging [<version-id>]` (sans id : revient à la version précédente). Équivalent fonctionnel au bouton du dashboard, exécuté en ligne de commande.
+
+**Rollback du code ≠ rollback D1.** Revenir à une version antérieure du Worker ne touche à aucune donnée D1 — le code revient en arrière, le schéma reste tel quel. C'est sûr uniquement si toutes les migrations appliquées depuis la version ciblée sont additives (voir "Politique de migration staging" ci-dessus) : l'ancien code n'a alors jamais besoin des colonnes/tables ajoutées depuis, il les ignore simplement. Si une migration destructive ou risquée a été appliquée depuis la version ciblée, un rollback de code seul peut laisser le Worker face à un schéma qu'il ne sait plus lire (colonne renommée/supprimée qu'il attend encore) — **vérifier la compatibilité du schéma avant tout rollback** : comparer les migrations appliquées entre la version courante et la version cible (`npx wrangler d1 execute DB --env staging --remote --command "SELECT * FROM d1_migrations ORDER BY id;"`), et si une migration non additive est en cause, traiter la restauration des données séparément (voir `docs/BACKUP_RECOVERY.md`) plutôt que de supposer qu'un rollback de code suffit.
+
+**Après rollback — revalidation obligatoire**, avant de considérer l'incident clos :
+
+- `/` (accueil), `/travail`, `/services`, `/contact` — chargement correct, pas d'erreur 500.
+- Admin (`/admin`) — connexion Access réelle, dashboard fonctionnel.
+- Envoi Contact — soumission réelle, Turnstile, réception Resend (même check que la validation Step 1 — voir `docs/REAL_STAGING_VALIDATION_REPORT_CONTACT_STEP1.md`).
+
 ## Validation staging réelle
 
 Le déploiement staging (D1 migré `0001`-`0006`, formulaire Contact, Turnstile réel, envoi Resend réel) est réellement validé — voir `docs/REAL_STAGING_VALIDATION_REPORT_CONTACT_STEP1.md` (Production Readiness Step 1). Checklist détaillée utilisée pour cette validation et pour les validations staging suivantes (R2/médiathèque, Access, etc.) : `docs/STAGING_VALIDATION.md`. Les sections de cette checklist au-delà du formulaire Contact (upload média, Cloudflare Access, CORS R2, etc.) n'ont pas encore été exécutées en réel — à traiter au fur et à mesure que ces fonctionnalités entrent dans le périmètre de Production Readiness.
