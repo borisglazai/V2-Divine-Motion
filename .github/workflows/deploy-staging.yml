@@ -1,5 +1,43 @@
 name: Deploy Staging
 
+# ---------------------------------------------------------------------------
+# DISABLED (Production Readiness — Step 1 closure, 2026-09-22). Every run of
+# this workflow (#7, #8, and every retry after — real Cloudflare API token,
+# both the new "Specified Workers -> Editor" granular grant AND a classic
+# account-wide "Workers Scripts: Write" grant, plus a wrangler bump from
+# 4.131.2 to 4.136.3) failed identically:
+#
+#   Authentication error [code: 10000]
+#   on GET /accounts/<account>/workers/services/v2-divine-motion
+#
+# This is Wrangler's own pre-deploy existence/ownership check (called by
+# `wrangler deploy` before it ever uploads anything), not a permission this
+# repo's config or CLAUDE.md guidance controls — see the "AUDIT BLOQUANT"
+# and "STRATÉGIE DE CONTOURNEMENT" investigations in this branch's history
+# for the full trace (wrangler.toml `[env.staging].name`, the
+# `dist/server/wrangler.json` redirect, `CLOUDFLARE_ENV`, and finally the
+# token/permissions audit). It matches dated, near-simultaneous community
+# reports of the same failure on the same endpoint, right after Cloudflare's
+# Workers granular-authorization GA (2026-09-15) — a live Cloudflare-side
+# issue, not something fixable from this repo.
+#
+# **The validated staging deployment path is now Cloudflare Workers Builds /
+# Git integration**, already connected to borisglazai/V2-Divine-Motion on
+# validation/staging-cloudflare, deploying straight from Cloudflare's own
+# infrastructure (no GitHub Actions, no CLOUDFLARE_API_TOKEN in this repo's
+# secrets involved in that path at all) — see
+# docs/REAL_STAGING_VALIDATION_REPORT_CONTACT_STEP1.md for the real,
+# manually-confirmed validation done through that path.
+#
+# `if: false` below turns every job step into a no-op — the workflow stays
+# runnable from the Actions UI (workflow_dispatch, so this is discoverable,
+# not deleted) but does nothing if triggered by accident, rather than
+# burning a run on a call already known to fail. To re-enable once Cloudflare
+# resolves the `/workers/services/*` issue (or a fix ships in a future
+# Wrangler release): remove the `if: false` line below and re-verify with a
+# manual run before relying on it again.
+# ---------------------------------------------------------------------------
+#
 # Manual-only, staging-only deployment (Production Readiness — Step 1
 # follow-up). Deliberately a SEPARATE workflow from ci.yml (which only
 # lints/typechecks/builds/tests and never deploys anywhere) so a staging
@@ -17,6 +55,7 @@ on:
 
 jobs:
   deploy-staging:
+    if: false # DISABLED — see header comment. Cloudflare Builds/Git integration is the validated staging deploy path.
     runs-on: ubuntu-latest
     env:
       ASTRO_TELEMETRY_DISABLED: "1"
