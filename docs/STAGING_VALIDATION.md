@@ -1,5 +1,7 @@
 # Staging Validation Checklist — Validation Brief 014S
 
+**Statut (2026-09-22)** : §1 (D1 staging) et §8 (déploiement staging) sont confirmés réels et validés — Cloudflare Workers Builds / Git integration, migrations `0001` à `0006` appliquées, formulaire Contact validé en conditions réelles (voir `docs/REAL_STAGING_VALIDATION_REPORT_CONTACT_STEP1.md`, Production Readiness Step 1). Les sections suivantes (R2/médiathèque, Access, uploads, etc.) restent à exécuter — cette checklist reste la référence pour ces validations restantes.
+
 **Pourquoi ce document existe.** L'environnement Claude Code qui a construit Brief 014 n'a aucun accès réseau sortant vers Cloudflare (`api.cloudflare.com` et `sparrow.cloudflare.com` sont bloqués au niveau du proxy de sortie de ce sandbox — vérifié empiriquement : `wrangler whoami` non authentifié, `wrangler login` bloque, `curl https://api.cloudflare.com/...` renvoie `403` au niveau du tunnel CONNECT). Toute la validation Cloudflare réelle (D1/R2/Access/deploy/navigateur) doit donc être exécutée par Boris, depuis une machine avec un accès réseau réel à Cloudflare — cette page est la checklist précise à suivre pendant cette exécution.
 
 **Ce document ne remplace pas** `docs/DEPLOYMENT.md` (commandes de provisionnement détaillées, politique CORS exacte, gestion des secrets) — il s'y réfère. Le suivre dans l'ordre.
@@ -36,19 +38,18 @@ Chaque section a des cases à cocher et un bloc **Evidence** à remplir (command
 
 ## 1. D1 staging
 
-Procédure complète : `docs/DEPLOYMENT.md` "D1 — configuration" + "Provisionner D1 staging".
+Procédure complète : `docs/DEPLOYMENT.md` "D1 — configuration" + "Politique de migration staging".
 
-- [ ] `wrangler d1 create divine-motion-v2-staging` (seulement si aucune base staging n'existe déjà).
-- [ ] Coller le `database_id` réel dans `wrangler.toml`, section `[env.staging.d1_databases]` (remplace `REPLACE_WITH_REAL_STAGING_D1_DATABASE_ID`).
-- [ ] Appliquer les 3 migrations, dans l'ordre, via Wrangler remote :
+- [x] Base staging réelle existante : `divine-motion-v2-staging`, `database_id = de8bf99e-45c2-407a-b435-52148b379bf2` (déjà dans `wrangler.toml`, `[env.staging.d1_databases]`).
+- [x] Les 6 migrations sont appliquées, automatiquement à chaque déploiement — via la commande de déploiement Cloudflare Builds (`npm run db:migrate:staging && npx wrangler deploy --env staging`, voir `docs/DEPLOYMENT.md` "Déploiement staging"). Une migration additive n'a plus besoin d'être lancée manuellement :
   ```bash
-  npx wrangler d1 migrations apply DB --env staging --remote
+  npm run db:migrate:staging   # = wrangler d1 migrations apply DB --env staging --remote
   ```
-- [ ] Vérifier la liste des migrations appliquées :
+- [ ] Vérifier la liste des migrations appliquées (à refaire/rafraîchir si une nouvelle migration est ajoutée) :
   ```bash
   npx wrangler d1 execute DB --env staging --remote --command "SELECT * FROM d1_migrations ORDER BY id;"
   ```
-  Attendu : `0001_initial.sql`, `0002_publication_rights_media_change_guard.sql`, `0003_media_upload_lifecycle.sql`, dans cet ordre, aucune erreur.
+  Attendu : `0001_initial.sql`, `0002_publication_rights_media_change_guard.sql`, `0003_media_upload_lifecycle.sql`, `0004_services_cms.sql`, `0005_home_content_rights_gate.sql`, `0006_visual_editor_phase2.sql`, dans cet ordre, aucune erreur.
 - [ ] Vérifier les tables présentes :
   ```bash
   npx wrangler d1 execute DB --env staging --remote --command "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%' AND name != 'd1_migrations' ORDER BY name;"
@@ -170,17 +171,14 @@ Politique exacte à appliquer : `docs/DEPLOYMENT.md` "R2 CORS" (bloc "Staging").
 
 ## 8. Déploiement staging
 
-- [ ] Build + deploy staging uniquement :
-  ```bash
-  npm run build
-  npx wrangler deploy --env staging
-  ```
-- [ ] Confirmer les bindings actifs (D1 remote, R2 remote, vars, secrets) dans la sortie de `wrangler deploy` ou via le tableau de bord Workers.
-- [ ] **Aucun `wrangler deploy` sans `--env staging` n'a été exécuté** (ce qui viserait la production par défaut si une section `[env.production]` existait — elle n'existe pas dans ce dépôt, donc un deploy sans `--env` échouerait de toute façon, mais à vérifier explicitement).
+- [x] Chemin réel confirmé : **Cloudflare Workers Builds / Git integration**, connecté à `borisglazai/V2-Divine-Motion`, branche `validation/staging-cloudflare` — pas de `wrangler deploy` manuel depuis un poste local. Build command : `npm run build`. Deploy command : `npm run db:migrate:staging && npx wrangler deploy --env staging`. `CLOUDFLARE_ENV=staging` configuré dans les variables de build Cloudflare (nécessaire pour que le build génère la config `[env.staging]`, voir `docs/DEPLOYMENT.md`).
+- [x] Bindings actifs confirmés (D1 remote, R2 remote, KV, vars, secrets) — voir `docs/REAL_STAGING_VALIDATION_REPORT_CONTACT_STEP1.md` §3.
+- [x] Le libellé « Production » du tableau de bord Cloudflare Workers Builds désigne la branche active du Worker **staging** `v2-divine-motion`, pas une ressource de production applicative — voir `docs/DEPLOYMENT.md` "Le libellé « Production »". Aucune section `[env.production]` n'existe dans `wrangler.toml`.
+- [ ] `.github/workflows/deploy-staging.yml` reste désactivé (`if: false`) — le chemin GitHub Actions échouait systématiquement (`Authentication error [code: 10000]`, probable bug Cloudflare côté autorisation granulaire des Workers) ; à réactiver seulement si Cloudflare corrige et après un run manuel de vérification.
 
 **Evidence :**
 ```
-(sortie de `wrangler deploy --env staging`)
+Déploiement réel confirmé via Cloudflare Workers Builds — voir docs/REAL_STAGING_VALIDATION_REPORT_CONTACT_STEP1.md.
 ```
 
 ---
@@ -379,6 +377,8 @@ Statut final :
 ---
 
 ## 24. Logs / revue sécurité (§36)
+
+**Confirmé** : Workers Observability est activé sur `v2-divine-motion` et validé par du trafic réel (Contact Step 1) — voir `docs/DEPLOYMENT.md` "Observabilité".
 
 - [ ] Examiner les logs staging (Workers Logs / `wrangler tail --env staging` pendant les tests ci-dessus).
 - [ ] Confirmer l'absence de : JWT complet, URL présignée complète, secrets, credentials, PII inutile.
