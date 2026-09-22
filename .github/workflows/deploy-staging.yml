@@ -45,7 +45,17 @@ jobs:
       # @astrojs/cloudflare's server entrypoint (wrangler.toml's `main`)
       # is built output, not source — `wrangler deploy` needs dist/ to
       # exist first, same as the CI workflow's own build step.
+      #
+      # CLOUDFLARE_ENV: `wrangler deploy` reads dist/server/wrangler.json
+      # (a redirected config @astrojs/cloudflare generates at build time),
+      # not wrangler.toml directly. @cloudflare/vite-plugin only bakes
+      # [env.staging]'s name/D1/R2/KV/vars into that generated file when
+      # this variable is set at build time — confirmed by reading its
+      # source and by a real local build/dry-run. Without it, `--env
+      # staging` on the deploy step below is silently ignored.
       - name: Build
+        env:
+          CLOUDFLARE_ENV: staging
         run: npm run build
 
       # Deploys ONLY the staging environment declared in wrangler.toml's
