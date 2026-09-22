@@ -51,21 +51,20 @@ id = "00000000000000000000000000000000"
 # to it from this session (Brief 010 scope: local only).
 # ---------------------------------------------------------------------------
 [env.staging]
+# Explicit name override — REQUIRED. Without this, Wrangler's own
+# config-resolution (see `inheritable()` + `appendEnvName()` in
+# node_modules/wrangler/wrangler-dist/cli.js) computes
+# "divine-motion-v2-staging" for `--env staging` — a service that has
+# never existed — instead of the real existing staging Worker
+# ("v2-divine-motion", confirmed from the Cloudflare dashboard). With
+# `name` set here, Wrangler uses it verbatim, no suffix applied.
+name = "v2-divine-motion"
 [[env.staging.kv_namespaces]]
 binding = "SESSION"
 id = "e3be4efe99f745acb0b2ac8be5a230d2"
 [[env.staging.kv_namespaces]]
-# NOT provisioned by this repo — `wrangler kv namespace create RATE_LIMIT
-# --env staging` must be run once, manually, against the real Cloudflare
-# account, and its real id pasted in below (replacing this placeholder)
-# before staging rate limiting actually activates. Until then,
-# getRateLimitKv() returns this placeholder-bound KVNamespace object, which
-# IS a real, usable (if not yet meaningfully isolated) KV namespace under
-# Miniflare-style bindings — but see this brief's delivery report for why
-# this specific id must still be replaced with a real one before relying on
-# it in staging (a placeholder id is not guaranteed stable/dedicated).
 binding = "RATE_LIMIT"
-id = "REPLACE_WITH_REAL_RATE_LIMIT_KV_NAMESPACE_ID"
+id = "9e9724c9a63e40e7ac5dd52b25d56f2e"
 [[env.staging.d1_databases]]
 binding = "DB"
 database_name = "divine-motion-v2-staging"
@@ -137,10 +136,8 @@ migrations_dir = "migrations"
 # CONTACT_FROM_EMAIL is not a secret (an address, same category as
 # R2_BUCKET_NAME) — explicit and environment-specific rather than derived
 # from site_settings.contact_email (the RECIPIENT, a different concern).
-# The staging value is a placeholder: Resend only accepts sending from a
-# domain it has verified, so this must be replaced with a real
-# Resend-verified address (see docs/DEPLOYMENT.md / this brief's delivery
-# report "actions manuelles restantes").
+# Staging uses Resend's own `onboarding@resend.dev` shared sender (works
+# with any Resend account, no domain verification needed) — same as local.
 #
 # RESEND_API_KEY is a real secret in every environment, never here — same
 # pattern as R2_ACCESS_KEY_ID (local: `.dev.vars`; staging: `wrangler secret
@@ -160,8 +157,8 @@ CF_ACCESS_TEAM_DOMAIN = "red-dream-564c.cloudflareaccess.com"
 CF_ACCESS_AUD = "7ab5d217f898c03df1ff97fa49f66faf482e0477b49df03b2207379ad161bdd3"
 R2_ACCOUNT_ID = "80690274479b4a7f525a8d4c768404bf"
 R2_BUCKET_NAME = "divine-motion-v2-media-staging"
-TURNSTILE_SITE_KEY = "REPLACE_WITH_REAL_TURNSTILE_SITE_KEY"
-CONTACT_FROM_EMAIL = "REPLACE_WITH_REAL_RESEND_VERIFIED_SENDER"
+TURNSTILE_SITE_KEY = "0x4AAAAAAE_mKcArY8LJ_GJS"
+CONTACT_FROM_EMAIL = "onboarding@resend.dev"
 
 # Production Access/R2/Contact config is deliberately NOT declared here —
 # same reasoning as the D1 section above. Set via Cloudflare dashboard
