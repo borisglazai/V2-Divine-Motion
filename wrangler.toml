@@ -154,7 +154,7 @@ CONTACT_FROM_EMAIL = "onboarding@resend.dev"
 
 [env.staging.vars]
 CF_ACCESS_TEAM_DOMAIN = "red-dream-564c.cloudflareaccess.com"
-CF_ACCESS_AUD = "7ab5d217f898c03df1ff97fa49f66faf482e0477b49df03b2207379ad161bdd3"
+CF_ACCESS_AUD = "953cff2106e779e988c7104d00f8904fdb30bfbdbb5f2a3ad3630c340c6cfb45"
 R2_ACCOUNT_ID = "80690274479b4a7f525a8d4c768404bf"
 R2_BUCKET_NAME = "divine-motion-v2-media-staging"
 TURNSTILE_SITE_KEY = "0x4AAAAAAE_mKcArY8LJ_GJS"
