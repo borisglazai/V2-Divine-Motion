@@ -149,6 +149,61 @@ test("public route is unaffected: 200, no admin security headers forced on it", 
   assert.ok(!cacheControl.includes("no-store"), "the public homepage must not get the admin's no-store directive");
 });
 
+// Production Readiness — Step 3: Security Headers Hardening. Runs against
+// the same real `astro preview` production build as the rest of this
+// suite (`import.meta.env.DEV` is `false` here, exactly like a real
+// deploy — see src/middleware.ts's own doc comment for why the new
+// headers are skipped in `astro dev`).
+test("public route gets the new hardening headers, and none of the admin-only ones", async () => {
+  const response = await fetch(`${BASE_URL}/`);
+  assert.equal(response.headers.get("x-content-type-options"), "nosniff");
+  assert.equal(response.headers.get("referrer-policy"), "strict-origin-when-cross-origin");
+  assert.ok(response.headers.get("permissions-policy")?.includes("geolocation=()"));
+
+  const csp = response.headers.get("content-security-policy") ?? "";
+  assert.ok(csp.includes("default-src 'self'"));
+  assert.ok(csp.includes("frame-ancestors 'none'"));
+  assert.ok(csp.includes("object-src 'none'"));
+  assert.ok(!csp.includes("challenges.cloudflare.com"), "Turnstile must not be allowlisted outside /contact");
+  assert.ok(!csp.includes("unsafe-eval"), "no directive should ever need unsafe-eval");
+
+  // Admin-only headers must never leak onto a public response.
+  assert.equal(response.headers.get("cache-control"), null);
+  assert.equal(response.headers.get("x-robots-tag"), null);
+  assert.equal(response.headers.get("x-frame-options"), null);
+});
+
+test("/contact gets the Turnstile-compatible CSP, other public routes don't", async () => {
+  const response = await fetch(`${BASE_URL}/contact`);
+  assert.equal(response.status, 200);
+  const csp = response.headers.get("content-security-policy") ?? "";
+  assert.ok(csp.includes("script-src 'self' https://challenges.cloudflare.com"));
+  assert.ok(csp.includes("frame-src https://challenges.cloudflare.com"));
+  assert.ok(csp.includes("connect-src 'self' https://challenges.cloudflare.com"));
+  // Real Turnstile widget markup/script must still render unaffected.
+  const body = await response.text();
+  assert.ok(body.includes("https://challenges.cloudflare.com/turnstile/v0/api.js"));
+  assert.ok(body.includes("cf-turnstile"));
+
+  const enResponse = await fetch(`${BASE_URL}/en/contact`);
+  const enCsp = enResponse.headers.get("content-security-policy") ?? "";
+  assert.ok(enCsp.includes("challenges.cloudflare.com"));
+
+  const homeCsp = (await fetch(`${BASE_URL}/`)).headers.get("content-security-policy") ?? "";
+  assert.ok(!homeCsp.includes("challenges.cloudflare.com"));
+});
+
+test("public media route keeps its real Content-Type and still gets hardening headers", async () => {
+  // No media id 1 exists in this suite's D1 (no seed/migration run against
+  // it) — the route's own 404 is what's under test here, not a real
+  // image byte stream; see tests/public/public-media.test.ts for the
+  // real-object case against a seeded D1+R2.
+  const response = await fetch(`${BASE_URL}/media/1/file`);
+  assert.equal(response.status, 404);
+  assert.equal(response.headers.get("x-content-type-options"), "nosniff");
+  assert.ok(response.headers.get("content-security-policy"));
+});
+
 // Validation Brief 014S bug B: /travail and /en/work switched from
 // `prerender = true` (checked as static dist/client/ files in
 // tests/routes.test.mjs) to `prerender = false` (real per-request D1
@@ -180,6 +235,25 @@ test("/admin with no JWT: blocked, no admin data, correct security headers", asy
   assert.equal(response.headers.get("cache-control"), "no-store");
   assert.equal(response.headers.get("x-robots-tag"), "noindex, nofollow");
   assert.equal(response.headers.get("x-frame-options"), "DENY");
+});
+
+test("/admin keeps its existing headers AND gets the new hardening headers, admin CSP has no Turnstile", async () => {
+  const response = await fetch(`${BASE_URL}/admin`);
+  assert.ok([401, 403].includes(response.status));
+
+  // Pre-existing admin headers, unchanged (Brief 012).
+  assert.equal(response.headers.get("cache-control"), "no-store");
+  assert.equal(response.headers.get("x-robots-tag"), "noindex, nofollow");
+  assert.equal(response.headers.get("x-frame-options"), "DENY");
+  assert.equal(response.headers.get("referrer-policy"), "same-origin");
+
+  // New (Step 3).
+  assert.equal(response.headers.get("x-content-type-options"), "nosniff");
+  assert.ok(response.headers.get("permissions-policy")?.includes("camera=()"));
+  const csp = response.headers.get("content-security-policy") ?? "";
+  assert.ok(csp.includes("default-src 'self'"));
+  assert.ok(csp.includes("r2.cloudflarestorage.com"), "admin CSP must allow the direct-to-R2 upload connect-src");
+  assert.ok(!csp.includes("challenges.cloudflare.com"), "Turnstile never renders in /admin");
 });
 
 test("/admin with a malformed Cf-Access-Jwt-Assertion header: still blocked, no detail leaked", async () => {

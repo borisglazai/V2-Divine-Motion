@@ -162,6 +162,35 @@ Le tableau de bord Cloudflare Workers Builds désigne la branche connectée comm
 
 Workers Observability est activée sur le Worker `v2-divine-motion` (activée par défaut côté plateforme Cloudflare pour les nouveaux Workers) et validée par du trafic réel pendant la validation Contact Step 1 (voir `docs/REAL_STAGING_VALIDATION_REPORT_CONTACT_STEP1.md`). `wrangler.toml` ne déclare pas de bloc `[observability]` explicite — non nécessaire, l'activation par défaut suffit ; à documenter explicitement ici si une configuration non-défaut (sampling rate, etc.) devient un jour nécessaire.
 
+### Security headers (Production Readiness — Step 3 : Security Headers Hardening)
+
+`src/middleware.ts` applique désormais des headers de sécurité sur **toutes** les réponses de ce Worker (public et `/admin`), pas seulement `Cache-Control`/`X-Robots-Tag`/`X-Frame-Options`/`Referrer-Policy` sur `/admin` (Brief 012, inchangés). Trois jeux de headers, choisis en lisant le code réel plutôt que par défaut générique :
+
+| | Routes publiques (hors Contact) | `/contact`, `/en/contact` | `/admin/**` |
+|---|---|---|---|
+| `X-Content-Type-Options` | `nosniff` | `nosniff` | `nosniff` |
+| `Referrer-Policy` | `strict-origin-when-cross-origin` | idem | `same-origin` (inchangé, plus strict — conservé volontairement) |
+| `Permissions-Policy` | `camera=(), microphone=(), geolocation=(), payment=(), usb=()` | idem | idem |
+| `Content-Security-Policy` | voir ci-dessous | voir ci-dessous (autorise Turnstile) | voir ci-dessous (autorise l'upload R2) |
+| `Cache-Control`, `X-Robots-Tag`, `X-Frame-Options` | — (inchangé) | — | `no-store` / `noindex, nofollow` / `DENY` (inchangés, Brief 012) |
+
+**CSP, directive par directive** (base commune aux trois jeux) :
+
+- `default-src 'self'`, `base-uri 'self'`, `object-src 'none'`, `frame-ancestors 'none'` — aucune ressource/plugin/navigation-cadre hors de ce domaine par défaut.
+- `img-src 'self'`, `font-src 'self'` — toutes les images (`/media/:id/file`, assets bundlés, `/mock/*.svg`) et toutes les polices (`@fontsource/*`, auto-hébergées, bundlées sous `/_astro/*`) sont same-origin ; aucun CDN externe utilisé nulle part dans le code.
+- `style-src 'self' 'unsafe-inline'` — **nécessaire** : `ImageFrame.astro` (public, recadrage par point focal), `GallerySlot.astro` et `EditorToolbar.astro` (admin) posent un `style="..."` calculé par élément (point focal en %, ratio, répartition flex d'une vignette de layout) — des valeurs qui changent par ligne/requête, donc un hash/nonce statique n'est pas praticable sans un refactor bien plus large (faire transiter un nonce par requête dans chaque template `.astro` qui en émet un). Aucune autre alternative trouvée dans le code actuel.
+- `script-src 'self'` (+ `https://challenges.cloudflare.com` sur `/contact`/`/en/contact` uniquement) — **pas de `'unsafe-inline'`** : le seul `<script is:inline>` du repo (le loader Turnstile, `ContactView.astro`) a un `src=` externe ; tout autre `<script>` est bundlé par Astro vers un fichier same-origin au build (vérifié : aucun `define:vars`, aucun script inline avec du code JS littéral nulle part dans `src/`). **Pas de `'unsafe-eval'`** : aucun `eval()`/`new Function()` dans ce dépôt.
+- `connect-src 'self'` (+ `https://challenges.cloudflare.com` sur Contact ; + `https://*.r2.cloudflarestorage.com` sur `/admin/**`) — l'upload média admin (`src/lib/admin/media-upload-client.ts`) fait un `PUT` navigateur→R2 direct vers l'URL présignée (Brief 014 §39), la seule vraie requête cross-origin de tout le code.
+- `frame-src 'none'` (public/admin) ou `https://challenges.cloudflare.com` (Contact uniquement — le widget Turnstile rend un iframe de ce domaine). Aucun `<iframe>` ailleurs dans le repo.
+
+**Turnstile scopé à `/contact`/`/en/contact` uniquement** (pas à tout le site public) : c'est la seule page où le script se charge réellement — éviter une CSP inutilement permissive sur le reste du site public.
+
+**HSTS (`Strict-Transport-Security`) — volontairement absent du code.** Non ajouté dans `src/middleware.ts` : ce niveau (forcer HTTPS pour tout futur visiteur, y compris en cache navigateur) est mieux géré par le réglage de zone Cloudflare ("Always Use HTTPS"/HSTS, SSL/TLS → Edge Certificates) qu'en dupliquer la logique ici, et son état actuel n'est pas vérifiable depuis ce dépôt. **À valider manuellement dans le Dashboard Cloudflare** (voir `docs/REAL_STAGING_VALIDATION_REPORT_PRODUCTION_READINESS_STEP2.md`-style vérification manuelle : SSL/TLS → Edge Certificates → "Always Use HTTPS" + HSTS activés) avant de considérer ce point clos.
+
+**`/_astro/*` non concerné** : servi directement par Cloudflare Workers Assets (`[assets] directory = "./dist"`, pas de `run_worker_first` dans `wrangler.toml`) — ces requêtes n'atteignent jamais le `fetch` handler de ce Worker, donc jamais ce middleware. Sans conséquence : la CSP d'un document gouverne ce qu'il charge, pas les headers de la ressource chargée elle-même.
+
+**Désactivé en `astro dev`** (`import.meta.env.DEV`) — même précédent que le bypass admin (`src/lib/auth/guard.ts`) : le client HMR de Vite peut avoir besoin d'autorisations que cette CSP ne donne pas, et les suites Playwright (`tests/*.browser.test.ts`) tournent contre `astro dev`, pas un build. Actif dans tout déploiement réel (staging aujourd'hui) — prouvé par `tests/admin/routes.test.mjs` contre un vrai `astro preview` (build de production).
+
 ### Rollback staging
 
 **Non exécuté à ce jour** — documenté ici pour être prêt si un déploiement staging s'avère défectueux. Le rollback est une action manuelle, jamais automatisée.
