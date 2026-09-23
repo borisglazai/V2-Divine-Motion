@@ -110,7 +110,7 @@ function formatDate(ms: number): string {
           <input type="hidden" name="view" value={view === "trash" ? "trash" : ""} />
           <label class="media-filters__field">
             Statut
-            <select name="status" onchange="this.form.submit()">
+            <select name="status" id="media-status-filter">
               <option value="" selected={statusFilter === ""}>Tous</option>
               {Object.entries(STATUS_LABEL).map(([value, label]) => (
                 <option value={value} selected={statusFilter === value}>{label}</option>
@@ -175,6 +175,18 @@ function formatDate(ms: number): string {
 <script>
   import { initMediaUploader } from "@/lib/admin/media-upload-client";
   initMediaUploader();
+
+  // The <select> above used to submit its form via an inline `change`
+  // event-handler attribute — a real staging CSP regression (Production
+  // Readiness Step 3): an inline event-handler attribute is exactly as
+  // much "inline script" as a <script> body under `script-src`, and isn't
+  // covered by the per-response hash mechanism in src/middleware.ts (that
+  // only hashes literal <script> tag content, never inline attribute
+  // values). Wiring it here instead keeps the exact same "pick a status,
+  // filter reloads" behavior with no inline script anywhere in this page.
+  document.getElementById("media-status-filter")?.addEventListener("change", (event) => {
+    (event.currentTarget as HTMLSelectElement).form?.submit();
+  });
 </script>
 
 <style>

@@ -22,7 +22,8 @@
  */
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
-import { existsSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { createHash } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { spawn, execFileSync } from "node:child_process";
 import path from "node:path";
@@ -127,6 +128,56 @@ function killWhateverIsOnPort(port) {
   }
 }
 
+// Production Readiness — Step 3 real-staging regression ("/admin/media"'s
+// "Ajouter des médias" stopped reacting — see src/middleware.ts's own doc
+// comment for the full root-cause trace). This is the guard for HALF of
+// that regression: an inline onXxx="..." event-handler attribute is not
+// covered by src/middleware.ts's per-response script hashing (that only
+// hashes literal <script> tag content, never attribute values) — the only
+// correct fix is never having one, so this is a permanent static check
+// across every .astro file, not just the one that broke.
+function collectAstroFiles(dir) {
+  const files = [];
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    if (entry.name.startsWith(".")) continue;
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) files.push(...collectAstroFiles(full));
+    else if (entry.name.endsWith(".astro")) files.push(full);
+  }
+  return files;
+}
+
+test("no .astro file anywhere in src/ has an inline onXxx=\"...\" event-handler attribute", () => {
+  const srcDir = path.join(repoRoot, "src");
+  const offenders = [];
+  for (const file of collectAstroFiles(srcDir)) {
+    const content = readFileSync(file, "utf-8");
+    const matches = content.match(/\bon[a-z]+="[^"]*"/g);
+    if (matches) offenders.push(`${path.relative(repoRoot, file)}: ${matches.join(", ")}`);
+  }
+  assert.deepEqual(offenders, [], `inline event-handler attribute(s) found — these are never covered by CSP script hashes:\n${offenders.join("\n")}`);
+});
+
+// The other half of the same regression: src/middleware.ts hashes every
+// literal <script type="module"> a response actually contains, computed
+// fresh from those exact bytes — so this asserts the property that would
+// have caught the original bug directly (script-src had no hash and no
+// 'unsafe-inline' at all): every inline script this HTML body contains
+// must have its sha256 present in this SAME response's own CSP header.
+function assertCspCoversInlineScripts(html, csp) {
+  const scriptPattern = /<script type="module">([\s\S]*?)<\/script>/g;
+  let found = 0;
+  for (const match of html.matchAll(scriptPattern)) {
+    found++;
+    const hash = createHash("sha256").update(match[1], "utf-8").digest("base64");
+    assert.ok(
+      csp.includes(`'sha256-${hash}'`),
+      `an inline <script> in this response isn't covered by its own Content-Security-Policy header (sha256-${hash})`,
+    );
+  }
+  assert.ok(found > 0, "expected at least one inline <script type=\"module\"> on this page — test itself would be vacuous otherwise");
+}
+
 async function waitForServer(url, timeoutMs) {
   const deadline = Date.now() + timeoutMs;
   let lastError;
@@ -164,8 +215,16 @@ test("public route gets the new hardening headers, and none of the admin-only on
   assert.ok(csp.includes("default-src 'self'"));
   assert.ok(csp.includes("frame-ancestors 'none'"));
   assert.ok(csp.includes("object-src 'none'"));
+  assert.ok(csp.includes("font-src 'self' data:"), "the inlined @fontsource-variable/manrope subset needs font-src data:");
   assert.ok(!csp.includes("challenges.cloudflare.com"), "Turnstile must not be allowlisted outside /contact");
+  assert.ok(!/script-src[^;]*unsafe-inline/.test(csp), "script-src must never fall back to unsafe-inline (style-src may)");
   assert.ok(!csp.includes("unsafe-eval"), "no directive should ever need unsafe-eval");
+
+  // The exact regression this Step 3 fix closes: every real inline
+  // <script> this page ships must be covered by its own CSP, not just
+  // assumed to be (see src/middleware.ts's doc comment for the full story
+  // of how the previous version got this wrong on /admin/media).
+  assertCspCoversInlineScripts(await response.text(), csp);
 
   // Admin-only headers must never leak onto a public response.
   assert.equal(response.headers.get("cache-control"), null);
@@ -173,17 +232,22 @@ test("public route gets the new hardening headers, and none of the admin-only on
   assert.equal(response.headers.get("x-frame-options"), null);
 });
 
-test("/contact gets the Turnstile-compatible CSP, other public routes don't", async () => {
+test("/contact gets the Turnstile-compatible CSP, other public routes don't, and its own inline scripts are covered", async () => {
   const response = await fetch(`${BASE_URL}/contact`);
   assert.equal(response.status, 200);
   const csp = response.headers.get("content-security-policy") ?? "";
   assert.ok(csp.includes("script-src 'self' https://challenges.cloudflare.com"));
   assert.ok(csp.includes("frame-src https://challenges.cloudflare.com"));
   assert.ok(csp.includes("connect-src 'self' https://challenges.cloudflare.com"));
-  // Real Turnstile widget markup/script must still render unaffected.
+  assert.ok(!/script-src[^;]*unsafe-inline/.test(csp), "script-src must never fall back to unsafe-inline, not even on Contact");
+
+  // Real Turnstile widget markup/script must still render unaffected, and
+  // this page's own inline scripts (Header/MobileNav/ScrollReveal, same as
+  // every public page) must be covered by this same response's CSP.
   const body = await response.text();
   assert.ok(body.includes("https://challenges.cloudflare.com/turnstile/v0/api.js"));
   assert.ok(body.includes("cf-turnstile"));
+  assertCspCoversInlineScripts(body, csp);
 
   const enResponse = await fetch(`${BASE_URL}/en/contact`);
   const enCsp = enResponse.headers.get("content-security-policy") ?? "";
@@ -252,8 +316,17 @@ test("/admin keeps its existing headers AND gets the new hardening headers, admi
   assert.ok(response.headers.get("permissions-policy")?.includes("camera=()"));
   const csp = response.headers.get("content-security-policy") ?? "";
   assert.ok(csp.includes("default-src 'self'"));
+  assert.ok(csp.includes("font-src 'self' data:"));
   assert.ok(csp.includes("r2.cloudflarestorage.com"), "admin CSP must allow the direct-to-R2 upload connect-src");
   assert.ok(!csp.includes("challenges.cloudflare.com"), "Turnstile never renders in /admin");
+  assert.ok(!/script-src[^;]*unsafe-inline/.test(csp), "script-src must never fall back to unsafe-inline, not even on /admin");
+  // This 401/403 body is plain text (no <script>), so the per-response
+  // hash mechanism has nothing to add here — the authenticated 200 path
+  // isn't reachable from this suite (no real Cloudflare Access JWT
+  // available in this environment, see this file's header comment), but
+  // `withInlineScriptHashes()` in src/middleware.ts has no route-specific
+  // branching: the exact same code path just proven against real public
+  // HTML above applies identically once an admin page actually renders.
 });
 
 test("/admin with a malformed Cf-Access-Jwt-Assertion header: still blocked, no detail leaked", async () => {
