@@ -276,7 +276,12 @@ test("Retirer (confirmed) marks the item Masqué immediately (still draft), and 
   await page.goto(TRAVAIL_EDITOR_URL, { waitUntil: "networkidle" });
   let slot = seedItemSlot();
 
-  page.once("dialog", (dialog) => dialog.accept());
+  // The preceding test proves that declining the native confirmation blocks
+  // the submit. Stub confirm to the accepted branch here so this test can
+  // focus deterministically on the visibility mutation and rendered state.
+  await page.evaluate(() => {
+    window.confirm = () => true;
+  });
   const visibilityResponse = page.waitForResponse(
     (response) => response.url().includes("/admin/site/travail/slot/visibility") && response.request().method() === "POST",
   );
