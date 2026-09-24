@@ -277,13 +277,20 @@ test("Retirer (confirmed) marks the item Masqué immediately (still draft), and 
   let slot = seedItemSlot();
 
   page.once("dialog", (dialog) => dialog.accept());
-  await Promise.all([page.waitForURL(/flash=success/, { timeout: 10_000 }), slot.locator("button", { hasText: "Retirer" }).click({ force: true })]);
+  await Promise.all([
+    page.waitForNavigation({ waitUntil: "domcontentloaded", timeout: 10_000 }),
+    slot.locator("button", { hasText: "Retirer" }).click({ force: true }),
+  ]);
+  assert.match(page.url(), /flash=success/, "Retirer must report a successful mutation");
 
   slot = seedItemSlot();
   assert.equal(await slot.locator(".gallery-slot__status-tag--hidden").count(), 1, "Masqué must be visible immediately after Retirer, even before publish");
 
-  await slot.locator("button", { hasText: "Remettre" }).click({ force: true });
-  await page.waitForURL(/flash=success/, { timeout: 10_000 });
+  await Promise.all([
+    page.waitForNavigation({ waitUntil: "domcontentloaded", timeout: 10_000 }),
+    slot.locator("button", { hasText: "Remettre" }).click({ force: true }),
+  ]);
+  assert.match(page.url(), /flash=success/, "Remettre must report a successful mutation");
 
   slot = seedItemSlot();
   assert.equal(await slot.locator(".gallery-slot__status-tag--hidden").count(), 0, "Remettre must clear the Masqué state immediately");

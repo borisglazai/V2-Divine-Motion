@@ -109,13 +109,18 @@ after(async () => {
 });
 
 test("FR — submitting with missing required fields re-renders the same page with visible, per-field errors (no redirect)", async () => {
-  await page.goto(`${BASE_URL}/contact`, { waitUntil: "networkidle" });
+  // Turnstile may keep network activity alive even though the form is ready.
+  // DOM readiness is the stable signal for the validation-only path.
+  await page.goto(`${BASE_URL}/contact`, { waitUntil: "domcontentloaded" });
 
   await page.locator("#email").fill("marie@example.com");
   await page.locator("#message").fill("Bonjour, ceci est un test.");
   // #name and #serviceType left empty on purpose.
 
-  await Promise.all([page.waitForLoadState("networkidle"), page.locator('button[type="submit"]', { hasText: "Envoyer" }).click({ force: true })]);
+  await Promise.all([
+    page.waitForNavigation({ waitUntil: "domcontentloaded" }),
+    page.locator('button[type="submit"]', { hasText: "Envoyer" }).click({ force: true }),
+  ]);
 
   assert.doesNotMatch(page.url(), /flash=success/, "an invalid submission must never redirect to the success flash");
 
@@ -131,12 +136,15 @@ test("FR — submitting with missing required fields re-renders the same page wi
 });
 
 test("EN — submitting with missing required fields re-renders the same page with visible, per-field errors (no redirect)", async () => {
-  await page.goto(`${BASE_URL}/en/contact`, { waitUntil: "networkidle" });
+  await page.goto(`${BASE_URL}/en/contact`, { waitUntil: "domcontentloaded" });
 
   await page.locator("#email").fill("marie@example.com");
   await page.locator("#message").fill("Hello, this is a test.");
 
-  await Promise.all([page.waitForLoadState("networkidle"), page.locator('button[type="submit"]', { hasText: "Send" }).click({ force: true })]);
+  await Promise.all([
+    page.waitForNavigation({ waitUntil: "domcontentloaded" }),
+    page.locator('button[type="submit"]', { hasText: "Send" }).click({ force: true }),
+  ]);
 
   assert.doesNotMatch(page.url(), /flash=success/);
 

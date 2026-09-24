@@ -11,7 +11,7 @@ import assert from "node:assert/strict";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import AxeBuilder from "@axe-core/playwright";
-import { chromium, type Browser, type Page } from "playwright";
+import { chromium, type Browser, type BrowserContext, type Page } from "playwright";
 import { startAstroDevServer, type AstroDevServer } from "../setup/astro-dev-server";
 
 const repoRoot = path.resolve(fileURLToPath(import.meta.url), "../../..");
@@ -34,6 +34,7 @@ const PUBLIC_ROUTES = [
 ] as const;
 
 let browser: Browser;
+let context: BrowserContext;
 let page: Page;
 let devServer: AstroDevServer;
 
@@ -49,10 +50,14 @@ function formatViolations(route: string, violations: Awaited<ReturnType<AxeBuild
 before(async () => {
   devServer = await startAstroDevServer({ repoRoot, port: PORT, readyUrl: `${BASE_URL}/` });
   browser = await chromium.launch();
-  page = await browser.newPage({ viewport: { width: 1400, height: 1000 } });
+  // axe-core isolates its injected scripts through a BrowserContext and
+  // explicitly rejects pages created through browser.newPage().
+  context = await browser.newContext({ viewport: { width: 1400, height: 1000 } });
+  page = await context.newPage();
 });
 
 after(async () => {
+  await context?.close();
   await browser?.close();
   await devServer?.stop();
 });
