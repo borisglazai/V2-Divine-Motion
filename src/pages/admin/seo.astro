@@ -1,11 +1,84 @@
 ---
 export const prerender = false;
 import AdminLayout from "@/layouts/AdminLayout.astro";
-import AdminPlaceholder from "@/components/admin/AdminPlaceholder.astro";
+import FlashMessage from "@/components/admin/FlashMessage.astro";
+import { getDb } from "@/lib/db/client";
+import { listPageSeo } from "@/lib/db/seo";
+import { listMedia } from "@/lib/db/media";
+import { readFlash } from "@/lib/admin/flash";
+import type { MediaRow, PageSeoRow, PageKey } from "@/lib/db/types";
 
 const identity = Astro.locals.adminIdentity!;
+const flash = readFlash(Astro.url);
+const labels: Record<PageKey, string> = { home: "Accueil", work: "Travail", services: "Services", about: "À propos", contact: "Contact", privacy: "Confidentialité" };
+const publicPaths: Record<PageKey, string> = { home: "/", work: "/travail", services: "/services", about: "/a-propos", contact: "/contact", privacy: "/confidentialite" };
+let rows: PageSeoRow[] = [];
+let media: MediaRow[] = [];
+let dbUnavailable = false;
+try {
+  const db = getDb();
+  [rows, media] = await Promise.all([listPageSeo(db), listMedia(db)]);
+  media = media.filter((item) => item.processing_status === "ready" && item.publication_rights_confirmed === 1);
+} catch (err) {
+  console.error("admin SEO: D1 read failed", err instanceof Error ? err.message : err);
+  dbUnavailable = true;
+}
 ---
 
 <AdminLayout activeId="seo" title="SEO" identity={identity}>
-  <AdminPlaceholder moduleName="SEO" />
+  <FlashMessage flash={flash} />
+  <p class="seo-intro">Gérez les titres, descriptions et aperçus sociaux des six pages publiques. Le design et les URL bilingues restent verrouillés.</p>
+  {dbUnavailable ? <p role="alert">Les données SEO ne sont pas disponibles pour le moment.</p> : (
+    <div class="seo-grid">
+      {rows.map((row) => (
+        <form method="POST" action="/admin/seo/save" class="seo-card">
+          <input type="hidden" name="pageKey" value={row.page_key} />
+          <div class="seo-card__heading">
+            <h2>{labels[row.page_key]}</h2>
+            <a href={publicPaths[row.page_key]} target="_blank">Voir la page</a>
+          </div>
+          <div class="seo-columns">
+            <fieldset>
+              <legend>Français</legend>
+              <label>Titre <input name="titleFr" value={row.title_fr} required maxlength="70" /></label>
+              <label>Description <textarea name="descriptionFr" required maxlength="180">{row.description_fr}</textarea></label>
+            </fieldset>
+            <fieldset>
+              <legend>English</legend>
+              <label>Title <input name="titleEn" value={row.title_en} required maxlength="70" /></label>
+              <label>Description <textarea name="descriptionEn" required maxlength="180">{row.description_en}</textarea></label>
+            </fieldset>
+          </div>
+          <label>Image de partage
+            <select name="ogMediaId">
+              <option value="">Aucune image</option>
+              {media.map((item) => <option value={item.id} selected={row.og_media_id === item.id}>{item.original_filename ?? `Média #${item.id}`}</option>)}
+            </select>
+          </label>
+          <label>URL canonique personnalisée <input type="url" name="canonicalOverride" value={row.canonical_override ?? ""} placeholder="https://…" /></label>
+          <label class="seo-check"><input type="checkbox" name="noindex" value="1" checked={row.noindex === 1} /> Ne pas indexer cette page</label>
+          <button class="admin-btn admin-btn--primary" type="submit">Enregistrer</button>
+        </form>
+      ))}
+    </div>
+  )}
 </AdminLayout>
+
+<style>
+  .seo-intro { color: var(--color-text-secondary); max-width: 48rem; margin-bottom: var(--space-6); }
+  .seo-grid { display: grid; gap: var(--space-6); }
+  .seo-card { display: grid; gap: var(--space-4); padding: var(--space-5); background: var(--color-surface-admin); border: var(--border-width) solid var(--color-border); border-radius: var(--radius-md); }
+  .seo-card__heading { display: flex; justify-content: space-between; align-items: baseline; gap: var(--space-4); }
+  .seo-card__heading h2 { font-family: var(--font-serif); font-size: var(--text-h3); }
+  .seo-card__heading a { color: var(--color-text-secondary); font-size: var(--text-small); }
+  .seo-columns { display: grid; gap: var(--space-4); }
+  fieldset { display: grid; gap: var(--space-3); border: 0; padding: 0; }
+  legend { font-weight: 600; margin-bottom: var(--space-2); }
+  label { display: grid; gap: var(--space-2); color: var(--color-text-secondary); font-size: var(--text-small); }
+  input, textarea, select { width: 100%; color: var(--color-text-primary); background: var(--color-bg-primary); border: var(--border-width) solid var(--color-border); border-radius: var(--radius-sm); padding: var(--space-3); font: inherit; }
+  textarea { min-height: 6rem; resize: vertical; }
+  .seo-check { display: flex; align-items: center; }
+  .seo-check input { width: auto; }
+  button { justify-self: start; }
+  @media (min-width: 800px) { .seo-columns { grid-template-columns: 1fr 1fr; } }
+</style>

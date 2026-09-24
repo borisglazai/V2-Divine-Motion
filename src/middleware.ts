@@ -64,8 +64,8 @@
  * this CSP active to violate in the first place.
  *
  * Fix: `withInlineScriptHashes()` below computes a real `sha256-` CSP
- * source for every literal `<script type="module">` a given HTML
- * response actually contains, per request, from the exact bytes being
+ * source for every executable module script and JSON-LD structured-data
+ * script a given HTML response actually contains, per request, from the exact bytes being
  * sent — never a hand-maintained hash list (which would just silently
  * go stale the next time any of these components' script changes,
  * reproducing this exact regression). No `'unsafe-inline'` for
@@ -190,7 +190,7 @@ const ADMIN_SECURITY_HEADERS: Record<string, string> = {
 // `<script>` (see this file's header comment) — never matches Turnstile's
 // `<script is:inline src="...">` (no closing-tag-adjacent inline body to
 // capture) or any external `<script src="...">`.
-const INLINE_MODULE_SCRIPT_PATTERN = /<script type="module">([\s\S]*?)<\/script>/g;
+const INLINE_SCRIPT_PATTERN = /<script type="(?:module|application\/ld\+json)">([\s\S]*?)<\/script>/g;
 
 async function sha256Base64(text: string): Promise<string> {
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
@@ -200,8 +200,8 @@ async function sha256Base64(text: string): Promise<string> {
 }
 
 /**
- * Appends a `'sha256-...'` script-src source for every literal inline
- * `<script type="module">` actually present in `html` — computed fresh
+ * Appends a `'sha256-...'` script-src source for every supported inline
+ * module/JSON-LD script actually present in `html` — computed fresh
  * from the real response bytes on every request, so `script-src` always
  * permits exactly what a given page ships, automatically, with nothing to
  * hand-maintain or let go stale (see this file's header comment for the
@@ -209,7 +209,7 @@ async function sha256Base64(text: string): Promise<string> {
  */
 async function withInlineScriptHashes(cspHeader: string, html: string): Promise<string> {
   const hashes = new Set<string>();
-  for (const match of html.matchAll(INLINE_MODULE_SCRIPT_PATTERN)) {
+  for (const match of html.matchAll(INLINE_SCRIPT_PATTERN)) {
     hashes.add(`'sha256-${await sha256Base64(match[1])}'`);
   }
   if (hashes.size === 0) return cspHeader;

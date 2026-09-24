@@ -30,6 +30,7 @@
     "test:media": "node --import tsx --test tests/admin/media-actions.test.ts",
     "test:public": "node --import tsx --test tests/public/work-gallery-adapter.test.ts tests/public/public-media.test.ts tests/public/work-view.test.ts tests/public/service-layout.test.ts tests/public/services-view.test.ts tests/public/testimonials-view.test.ts tests/public/site-editor-view.test.ts tests/public/site-editor-phase2.test.ts tests/public/site-editor-phase3.test.ts tests/public/home-work-preview.test.ts tests/public/home-services-preview.test.ts tests/public/home-featured-toggle.test.ts",
     "test:contact": "node --import ./tests/setup/build-year-shim.mjs --import tsx --test tests/contact/validation.test.ts tests/contact/submit-action.test.ts",
+    "test:seo": "node --import tsx --test tests/admin/seo-validation.test.ts",
     "test:browser": "node --import tsx --test --test-concurrency=1 tests/admin/layout-picker.browser.test.ts tests/admin/contact-form-isolation.browser.test.ts tests/admin/gallery-slot-phase3.browser.test.ts tests/public/gallery-block-frame.browser.test.ts tests/public/home-previews.browser.test.ts tests/public/contact-form.browser.test.ts tests/public/accessibility.browser.test.ts"
   },
   "dependencies": {

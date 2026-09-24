@@ -120,6 +120,9 @@ jobs:
       - name: Contact form tests
         run: npm run test:contact
 
+      - name: SEO CMS tests
+        run: npm run test:seo
+
       # Two real-browser regression suites (Playwright, not `node --test` +
       # `fetch()`): Travail's gallery-layout picker (client-side JS/CSS
       # state a plain HTTP request can't exercise — see

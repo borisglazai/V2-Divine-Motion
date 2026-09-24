@@ -41,19 +41,18 @@ Ces corrections sont des mutations de contenu D1 staging, pas des corrections de
 
 Les vraies coordonnées et la validation légale sont des entrées propriétaire requises; ne pas les inventer.
 
-### 2.3 SEO MVP incomplet
+### 2.3 SEO MVP — corrigé dans le lot du 24 septembre 2026
 
-Le schéma et le DAL `page_seo` existent, mais ne sont reliés ni aux pages publiques ni à une interface admin réelle.
+Le lot SEO relie désormais `page_seo` aux pages publiques et fournit :
 
-Manquent :
+- `/admin/seo` fonctionnel avec validation FR/EN, image sociale, canonical et noindex;
+- titres/descriptions D1 avec repli sûr sur les contenus existants;
+- canonical, hreflang, Open Graph et Twitter Cards;
+- sitemap multilingue et `robots.txt`;
+- données structurées Schema.org `ProfessionalService`;
+- autorisation publique contrôlée des médias utilisés uniquement comme image Open Graph.
 
-- `/admin/seo` fonctionnel;
-- lecture de `page_seo` dans les layouts publics;
-- image Open Graph (aucune des 12 pages contrôlées n'en expose);
-- métadonnées Twitter/social complètes;
-- sitemap multilingue;
-- `robots.txt`;
-- données structurées Schema.org pertinentes.
+La validation finale de ce lot reste soumise au build Cloudflare staging et au contrôle navigateur après déploiement.
 
 ### 2.4 Paramètres et contenu CMS promis mais inachevés
 

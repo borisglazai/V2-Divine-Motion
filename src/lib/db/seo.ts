@@ -18,6 +18,15 @@ export async function listPageSeo(db: D1Database): Promise<PageSeoRow[]> {
   return results;
 }
 
+/** Authorizes an OG image only while a live, indexable public page references it. */
+export async function isMediaUsedByPublicSeo(db: D1Database, mediaId: number): Promise<boolean> {
+  const row = await db
+    .prepare(`SELECT 1 AS used FROM page_seo WHERE og_media_id = ? AND noindex = 0 LIMIT 1`)
+    .bind(mediaId)
+    .first<{ used: 1 }>();
+  return row?.used === 1;
+}
+
 export interface PageSeoInput {
   titleFr?: string;
   titleEn?: string;

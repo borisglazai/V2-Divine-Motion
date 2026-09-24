@@ -4,6 +4,10 @@ import { getAllPathsFor, type PageId } from "@/i18n/routes";
 import { t } from "@/i18n/ui";
 import Header from "@/components/Header.astro";
 import Footer from "@/components/Footer.astro";
+import { getDb } from "@/lib/db/client";
+import { getPageSeo } from "@/lib/db/seo";
+import { getSiteSettings } from "@/lib/db/settings";
+import { publicMediaFileUrl } from "@/lib/public-media";
 
 interface Props {
   locale: "fr" | "en";
@@ -54,6 +58,45 @@ const copy = t(locale);
 const paths = getAllPathsFor(pageId);
 const siteUrl = Astro.site?.toString().replace(/\/$/, "") ?? "";
 const skipLinkLabel = locale === "fr" ? "Aller au contenu" : "Skip to content";
+
+// D1 SEO is deliberately fail-soft: editorial pages must keep rendering
+// with their component-provided title/description if D1 is temporarily
+// unavailable or a seed row is missing.
+let seoTitle = title;
+let seoDescription = description;
+let canonicalUrl = `${siteUrl}${paths[locale]}`;
+let ogImageUrl: string | null = null;
+let noindex = false;
+let brandName: string = copy.siteName;
+let serviceArea: string | null = null;
+try {
+  const db = getDb();
+  const [seo, settings] = await Promise.all([getPageSeo(db, pageId), getSiteSettings(db)]);
+  if (seo) {
+    seoTitle = locale === "fr" ? seo.title_fr : seo.title_en;
+    seoDescription = locale === "fr" ? seo.description_fr : seo.description_en;
+    canonicalUrl = seo.canonical_override || canonicalUrl;
+    ogImageUrl = seo.og_media_id ? `${siteUrl}${publicMediaFileUrl(seo.og_media_id)}` : null;
+    noindex = seo.noindex === 1;
+  }
+  if (settings) {
+    brandName = settings.brand_name;
+    serviceArea = locale === "fr" ? settings.service_area_fr : settings.service_area_en;
+  }
+} catch (err) {
+  console.error("BaseLayout: SEO D1 read failed", err instanceof Error ? err.message : err);
+}
+
+const fullTitle = seoTitle.includes(brandName) ? seoTitle : `${seoTitle} — ${brandName}`;
+const structuredData = JSON.stringify({
+  "@context": "https://schema.org",
+  "@type": "ProfessionalService",
+  name: brandName,
+  url: `${siteUrl}${paths[locale]}`,
+  description: seoDescription,
+  ...(serviceArea ? { areaServed: serviceArea } : {}),
+  ...(ogImageUrl ? { image: ogImageUrl } : {}),
+});
 ---
 
 <!doctype html>
@@ -61,21 +104,30 @@ const skipLinkLabel = locale === "fr" ? "Aller au contenu" : "Skip to content";
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>{title} — {copy.siteName}</title>
-    <meta name="description" content={description} />
+    <title>{fullTitle}</title>
+    <meta name="description" content={seoDescription} />
+    {noindex && <meta name="robots" content="noindex, nofollow" />}
 
-    <!-- SEO scaffolding: real per-page OG/Twitter data and structured data
-         (Schema.org LocalBusiness/Organization) land with Phase 4/5 content;
-         canonical + hreflang are wired now since they depend only on the
-         FR/EN route map, not on real content (docs/TECHNICAL_ARCHITECTURE.md). -->
-    <link rel="canonical" href={`${siteUrl}${paths[locale]}`} />
+    <!-- SEO MVP: D1-backed bilingual metadata with component fallbacks,
+         canonical/hreflang, social cards and structured data. -->
+    <link rel="canonical" href={canonicalUrl} />
     <link rel="alternate" hreflang="fr" href={`${siteUrl}${paths.fr}`} />
     <link rel="alternate" hreflang="en" href={`${siteUrl}${paths.en}`} />
     <link rel="alternate" hreflang="x-default" href={`${siteUrl}${paths.fr}`} />
 
-    <meta property="og:title" content={title} />
-    <meta property="og:description" content={description} />
+    <meta property="og:title" content={fullTitle} />
+    <meta property="og:description" content={seoDescription} />
     <meta property="og:type" content="website" />
+    <meta property="og:url" content={canonicalUrl} />
+    <meta property="og:locale" content={locale === "fr" ? "fr_CA" : "en_CA"} />
+    <meta property="og:locale:alternate" content={locale === "fr" ? "en_CA" : "fr_CA"} />
+    <meta property="og:site_name" content={brandName} />
+    {ogImageUrl && <meta property="og:image" content={ogImageUrl} />}
+    <meta name="twitter:card" content={ogImageUrl ? "summary_large_image" : "summary"} />
+    <meta name="twitter:title" content={fullTitle} />
+    <meta name="twitter:description" content={seoDescription} />
+    {ogImageUrl && <meta name="twitter:image" content={ogImageUrl} />}
+    <script is:inline type="application/ld+json" set:html={structuredData} />
 
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
   </head>
