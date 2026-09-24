@@ -18,14 +18,9 @@
  * `/admin/site/travail` without a real Access JWT, same as every manual
  * smoke test this project has used for `/admin/site/**` so far.
  *
- * `astro dev` in this Astro version is a manager CLI, not a foreground
- * server (unlike `astro preview`, which routes.test.mjs spawns and keeps
- * alive itself): `astro dev --port N` starts a detached daemon and the
- * invoking process exits on its own once that daemon reports ready —
- * confirmed empirically, not assumed. So this suite runs it with
- * `execFileSync` (waits for that exit) and tears it down with the
- * matching `astro dev stop`, rather than tracking/killing a child PID
- * the way routes.test.mjs does for `astro preview`.
+ * The shared browser-test helper starts `astro dev` as a foreground child,
+ * waits for HTTP readiness and retains the process handle for reliable
+ * teardown. This matches current Astro behavior and avoids CI timeouts.
  *
  * CI runs `db:migrate:local` before this suite but never seeds the
  * default local D1 (only isolated per-file `--persist-to` DBs get
@@ -41,6 +36,7 @@ import { fileURLToPath } from "node:url";
 import { execFileSync } from "node:child_process";
 import path from "node:path";
 import { chromium, type Browser, type Page } from "playwright";
+import { startAstroDevServer, type AstroDevServer } from "../setup/astro-dev-server";
 
 const repoRoot = path.resolve(fileURLToPath(import.meta.url), "../../..");
 const PORT = 4327;
@@ -49,6 +45,7 @@ const TRAVAIL_EDITOR_URL = `${BASE_URL}/admin/site/travail?lang=fr`;
 
 let browser: Browser;
 let page: Page;
+let devServer: AstroDevServer;
 
 function seedWorkPageContentIfMissing(): void {
   execFileSync(
@@ -78,72 +75,9 @@ function resetGalleryLayoutToEditorial(): void {
   }
 }
 
-async function waitForServer(url: string, timeoutMs: number): Promise<void> {
-  const deadline = Date.now() + timeoutMs;
-  let lastError: unknown;
-  while (Date.now() < deadline) {
-    try {
-      const response = await fetch(url);
-      if (response.ok || response.status < 500) return;
-    } catch (err) {
-      lastError = err;
-    }
-    await new Promise((resolve) => setTimeout(resolve, 300));
-  }
-  throw new Error(`Dev server did not become ready at ${url} in time: ${lastError}`);
-}
-
-function killWhateverIsOnPort(port: number): void {
-  let pids = "";
-  try {
-    pids = execFileSync("lsof", ["-t", `-i:${port}`], { encoding: "utf-8" }).trim();
-  } catch {
-    return;
-  }
-  for (const pidStr of pids.split("\n").filter(Boolean)) {
-    const pid = Number(pidStr);
-    if (pid === process.pid || pid === process.ppid) continue;
-    try {
-      process.kill(pid, "SIGKILL");
-    } catch {
-      // Already gone.
-    }
-  }
-}
-
-function stopDevServer(): void {
-  try {
-    execFileSync(path.join(repoRoot, "node_modules", ".bin", "astro"), ["dev", "stop"], { cwd: repoRoot, stdio: "pipe" });
-  } catch {
-    // Best-effort — killWhateverIsOnPort below is the real fallback.
-  }
-}
-
-/** `astro dev` occasionally fails to bring its daemon up ("process exited before becoming ready", transient, observed repeatedly in this project) — retry a few times before giving up. */
-function startDevServer(): void {
-  let lastError: unknown;
-  for (let attempt = 1; attempt <= 3; attempt++) {
-    try {
-      execFileSync(path.join(repoRoot, "node_modules", ".bin", "astro"), ["dev", "--port", String(PORT)], {
-        cwd: repoRoot,
-        stdio: "pipe",
-        timeout: 20_000,
-      });
-      return;
-    } catch (err) {
-      lastError = err;
-      stopDevServer();
-      killWhateverIsOnPort(PORT);
-    }
-  }
-  throw new Error(`astro dev failed to start after 3 attempts: ${lastError}`);
-}
-
 before(async () => {
-  killWhateverIsOnPort(PORT);
   seedWorkPageContentIfMissing();
-  startDevServer();
-  await waitForServer(`${BASE_URL}/`, 30_000);
+  devServer = await startAstroDevServer({ repoRoot, port: PORT, readyUrl: `${BASE_URL}/` });
   browser = await chromium.launch();
   page = await browser.newPage({ viewport: { width: 1400, height: 1000 } });
 });
@@ -151,8 +85,7 @@ before(async () => {
 after(async () => {
   resetGalleryLayoutToEditorial();
   await browser?.close();
-  stopDevServer();
-  killWhateverIsOnPort(PORT);
+  await devServer?.stop();
 });
 
 async function activeLayoutValue(): Promise<string | null> {

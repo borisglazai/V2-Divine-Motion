@@ -28,6 +28,7 @@ import { fileURLToPath } from "node:url";
 import { execFileSync } from "node:child_process";
 import path from "node:path";
 import { chromium, type Browser, type Page } from "playwright";
+import { startAstroDevServer, type AstroDevServer } from "../setup/astro-dev-server";
 
 const repoRoot = path.resolve(fileURLToPath(import.meta.url), "../../..");
 const PORT = 4334;
@@ -35,6 +36,7 @@ const BASE_URL = `http://localhost:${PORT}`;
 
 let browser: Browser;
 let page: Page;
+let devServer: AstroDevServer;
 
 function runD1(sql: string): void {
   execFileSync("npx", ["wrangler", "d1", "execute", "DB", "--local", "--command", sql], { cwd: repoRoot, stdio: "pipe" });
@@ -53,71 +55,8 @@ function seedHomePreviewFixtures(): void {
   );
 }
 
-async function waitForServer(url: string, timeoutMs: number): Promise<void> {
-  const deadline = Date.now() + timeoutMs;
-  let lastError: unknown;
-  while (Date.now() < deadline) {
-    try {
-      const response = await fetch(url);
-      if (response.ok || response.status < 500) return;
-    } catch (err) {
-      lastError = err;
-    }
-    await new Promise((resolve) => setTimeout(resolve, 300));
-  }
-  throw new Error(`Dev server did not become ready at ${url} in time: ${lastError}`);
-}
-
-function killWhateverIsOnPort(port: number): void {
-  let pids = "";
-  try {
-    pids = execFileSync("lsof", ["-t", `-i:${port}`], { encoding: "utf-8" }).trim();
-  } catch {
-    return;
-  }
-  for (const pidStr of pids.split("\n").filter(Boolean)) {
-    const pid = Number(pidStr);
-    if (pid === process.pid || pid === process.ppid) continue;
-    try {
-      process.kill(pid, "SIGKILL");
-    } catch {
-      // Already gone.
-    }
-  }
-}
-
-function stopDevServer(): void {
-  try {
-    execFileSync(path.join(repoRoot, "node_modules", ".bin", "astro"), ["dev", "stop"], { cwd: repoRoot, stdio: "pipe" });
-  } catch {
-    // Best-effort — killWhateverIsOnPort below is the real fallback.
-  }
-}
-
-/** `astro dev` occasionally fails to bring its daemon up ("process exited before becoming ready", transient, observed repeatedly in this project) — retry a few times before giving up. */
-function startDevServer(): void {
-  let lastError: unknown;
-  for (let attempt = 1; attempt <= 3; attempt++) {
-    try {
-      execFileSync(path.join(repoRoot, "node_modules", ".bin", "astro"), ["dev", "--port", String(PORT)], {
-        cwd: repoRoot,
-        stdio: "pipe",
-        timeout: 20_000,
-      });
-      return;
-    } catch (err) {
-      lastError = err;
-      stopDevServer();
-      killWhateverIsOnPort(PORT);
-    }
-  }
-  throw new Error(`astro dev failed to start after 3 attempts: ${lastError}`);
-}
-
 before(async () => {
-  killWhateverIsOnPort(PORT);
-  startDevServer();
-  await waitForServer(`${BASE_URL}/`, 30_000);
+  devServer = await startAstroDevServer({ repoRoot, port: PORT, readyUrl: `${BASE_URL}/` });
   seedHomePreviewFixtures();
   browser = await chromium.launch();
   page = await browser.newPage({ viewport: { width: 1400, height: 1000 } });
@@ -125,8 +64,7 @@ before(async () => {
 
 after(async () => {
   await browser?.close();
-  stopDevServer();
-  killWhateverIsOnPort(PORT);
+  await devServer?.stop();
 });
 
 for (const [label, path_] of [
