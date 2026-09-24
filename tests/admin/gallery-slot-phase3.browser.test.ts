@@ -277,19 +277,23 @@ test("Retirer (confirmed) marks the item Masqué immediately (still draft), and 
   let slot = seedItemSlot();
 
   page.once("dialog", (dialog) => dialog.accept());
-  await Promise.all([
-    page.waitForNavigation({ waitUntil: "domcontentloaded", timeout: 10_000 }),
-    slot.locator("button", { hasText: "Retirer" }).click({ force: true }),
-  ]);
+  const visibilityResponse = page.waitForResponse(
+    (response) => response.url().includes("/admin/site/travail/slot/visibility") && response.request().method() === "POST",
+  );
+  await slot.locator("button", { hasText: "Retirer" }).click({ force: true });
+  assert.ok((await visibilityResponse).status() < 400, "Retirer POST must succeed");
+  await seedItemSlot().locator("button", { hasText: "Remettre" }).waitFor({ state: "visible" });
   assert.match(page.url(), /flash=success/, "Retirer must report a successful mutation");
 
   slot = seedItemSlot();
   assert.equal(await slot.locator(".gallery-slot__status-tag--hidden").count(), 1, "Masqué must be visible immediately after Retirer, even before publish");
 
-  await Promise.all([
-    page.waitForNavigation({ waitUntil: "domcontentloaded", timeout: 10_000 }),
-    slot.locator("button", { hasText: "Remettre" }).click({ force: true }),
-  ]);
+  const restoreResponse = page.waitForResponse(
+    (response) => response.url().includes("/admin/site/travail/slot/visibility") && response.request().method() === "POST",
+  );
+  await slot.locator("button", { hasText: "Remettre" }).click({ force: true });
+  assert.ok((await restoreResponse).status() < 400, "Remettre POST must succeed");
+  await seedItemSlot().locator("button", { hasText: "Retirer" }).waitFor({ state: "visible" });
   assert.match(page.url(), /flash=success/, "Remettre must report a successful mutation");
 
   slot = seedItemSlot();
