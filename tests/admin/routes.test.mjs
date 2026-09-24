@@ -258,11 +258,10 @@ test("/contact gets the Turnstile-compatible CSP, other public routes don't, and
 });
 
 test("public media route keeps its real Content-Type and still gets hardening headers", async () => {
-  // No media id 1 exists in this suite's D1 (no seed/migration run against
-  // it) — the route's own 404 is what's under test here, not a real
-  // image byte stream; see tests/public/public-media.test.ts for the
-  // real-object case against a seeded D1+R2.
-  const response = await fetch(`${BASE_URL}/media/1/file`);
+  // This preview server intentionally has no D1/R2 bindings. Use an invalid
+  // id so the endpoint returns its own 404 before reading either binding;
+  // tests/public/public-media.test.ts covers valid ids against seeded D1+R2.
+  const response = await fetch(`${BASE_URL}/media/not-a-number/file`);
   assert.equal(response.status, 404);
   assert.equal(response.headers.get("x-content-type-options"), "nosniff");
   assert.ok(response.headers.get("content-security-policy"));
