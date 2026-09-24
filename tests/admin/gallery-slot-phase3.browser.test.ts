@@ -276,16 +276,14 @@ test("Retirer (confirmed) marks the item Masqué immediately (still draft), and 
   await page.goto(TRAVAIL_EDITOR_URL, { waitUntil: "networkidle" });
   let slot = seedItemSlot();
 
-  // The preceding test proves that declining the native confirmation blocks
-  // the submit. Stub confirm to the accepted branch here so this test can
-  // focus deterministically on the visibility mutation and rendered state.
-  await page.evaluate(() => {
-    window.confirm = () => true;
-  });
+  // The preceding test proves that the native confirmation guard blocks a
+  // declined click. Submit the real form directly here to isolate and prove
+  // the accepted branch: POST action, D1 draft update and rendered state.
+  const removeForm = slot.locator('form[action="/admin/site/travail/slot/visibility"][data-confirm]');
   const visibilityResponse = page.waitForResponse(
     (response) => response.url().includes("/admin/site/travail/slot/visibility") && response.request().method() === "POST",
   );
-  await slot.locator("button", { hasText: "Retirer" }).click({ force: true });
+  await removeForm.evaluate((form: HTMLFormElement) => form.submit());
   assert.ok((await visibilityResponse).status() < 400, "Retirer POST must succeed");
   await seedItemSlot().locator("button", { hasText: "Remettre" }).waitFor({ state: "visible" });
   assert.match(page.url(), /flash=success/, "Retirer must report a successful mutation");
@@ -296,7 +294,9 @@ test("Retirer (confirmed) marks the item Masqué immediately (still draft), and 
   const restoreResponse = page.waitForResponse(
     (response) => response.url().includes("/admin/site/travail/slot/visibility") && response.request().method() === "POST",
   );
-  await slot.locator("button", { hasText: "Remettre" }).click({ force: true });
+  await slot
+    .locator('form[action="/admin/site/travail/slot/visibility"]')
+    .evaluate((form: HTMLFormElement) => form.submit());
   assert.ok((await restoreResponse).status() < 400, "Remettre POST must succeed");
   await seedItemSlot().locator("button", { hasText: "Retirer" }).waitFor({ state: "visible" });
   assert.match(page.url(), /flash=success/, "Remettre must report a successful mutation");
