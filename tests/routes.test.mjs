@@ -1,62 +1,61 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 
-const distClient = fileURLToPath(new URL("../dist/client/", import.meta.url));
+const repoRoot = fileURLToPath(new URL("../", import.meta.url));
+const distChunks = path.join(repoRoot, "dist/server/chunks");
 
-// Mirrors docs/INFORMATION_ARCHITECTURE.md exactly. If a route is renamed
-// or added there, update this list in the same change.
-//
-// travail/en-work (Validation Brief 014S), services/en-services (Services
-// CMS brief), and index/en-index (Témoignages CMS brief) are deliberately
-// absent here: all six switched from `prerender = true` (static output,
-// checked below) to `prerender = false` (server-rendered per request,
-// real CMS data — see src/components/pages/WorkView.astro /
-// ServicesView.astro / HomeView.astro) so a publish/reload is ever
-// reflected. Their HTTP-level equivalent of this check lives in
-// tests/admin/routes.test.mjs ("public CMS pages render server-side"),
-// which already spawns a real `astro preview` server for the admin
-// security suite — no separate server-spawning test file needed here.
+// Mirrors docs/INFORMATION_ARCHITECTURE.md. All public pages are SSR now:
+// their content, SEO and settings can come from D1 and must be visible without
+// rebuilding static HTML after every CMS publication.
 const expectedRoutes = [
-  { locale: "fr", htmlPath: "a-propos/index.html" },
-  { locale: "fr", htmlPath: "contact/index.html" },
-  { locale: "fr", htmlPath: "confidentialite/index.html" },
-  { locale: "en", htmlPath: "en/about/index.html" },
-  { locale: "en", htmlPath: "en/contact/index.html" },
-  { locale: "en", htmlPath: "en/privacy/index.html" },
+  { locale: "fr", route: "/", source: "src/pages/index.astro" },
+  { locale: "fr", route: "/travail", source: "src/pages/travail.astro" },
+  { locale: "fr", route: "/services", source: "src/pages/services.astro" },
+  { locale: "fr", route: "/a-propos", source: "src/pages/a-propos.astro" },
+  { locale: "fr", route: "/contact", source: "src/pages/contact.astro" },
+  { locale: "fr", route: "/confidentialite", source: "src/pages/confidentialite.astro" },
+  { locale: "en", route: "/en", source: "src/pages/en/index.astro" },
+  { locale: "en", route: "/en/work", source: "src/pages/en/work.astro" },
+  { locale: "en", route: "/en/services", source: "src/pages/en/services.astro" },
+  { locale: "en", route: "/en/about", source: "src/pages/en/about.astro" },
+  { locale: "en", route: "/en/contact", source: "src/pages/en/contact.astro" },
+  { locale: "en", route: "/en/privacy", source: "src/pages/en/privacy.astro" },
 ];
 
-test("build produced every FR/EN public route from INFORMATION_ARCHITECTURE.md", () => {
-  assert.ok(
-    existsSync(distClient),
-    "dist/client not found — run `npm run build` before `npm test`",
-  );
+function serverManifestSource() {
+  assert.ok(existsSync(distChunks), "dist/server/chunks not found — run `npm run build` before `npm test`");
+  const manifestFile = readdirSync(distChunks).find((name) => {
+    if (!/^server_.*\.mjs$/.test(name)) return false;
+    return readFileSync(path.join(distChunks, name), "utf8").includes("deserializeManifest(");
+  });
+  assert.ok(manifestFile, "Astro server manifest chunk not found after build");
+  return readFileSync(path.join(distChunks, manifestFile), "utf8");
+}
 
-  for (const route of expectedRoutes) {
-    const fullPath = path.join(distClient, route.htmlPath);
-    assert.ok(existsSync(fullPath), `Missing built route: ${route.htmlPath}`);
-  }
-});
-
-test("each route renders <html lang> matching its locale", () => {
-  for (const route of expectedRoutes) {
-    const fullPath = path.join(distClient, route.htmlPath);
-    const html = readFileSync(fullPath, "utf-8");
-    assert.match(
-      html,
-      new RegExp(`<html lang="${route.locale}"`),
-      `${route.htmlPath} should declare lang="${route.locale}"`,
+test("server build contains every FR/EN public route", () => {
+  const manifest = serverManifestSource();
+  for (const { route, source } of expectedRoutes) {
+    assert.ok(
+      manifest.includes(`"route": "${route}"`) && manifest.includes(`"component": "${source}"`),
+      `Missing SSR route ${route} (${source}) in the Astro server manifest`,
     );
   }
 });
 
-test("FR/EN route pairs cross-reference each other via hreflang", () => {
-  // travail/en-work, services/en-services, and index/en-index are no
-  // longer static output (see expectedRoutes' header comment) — a-propos
-  // is still prerendered and shares the same BaseLayout hreflang wiring,
-  // so it stays a valid cross-check for this mechanism.
-  const about = readFileSync(path.join(distClient, "a-propos/index.html"), "utf-8");
-  assert.match(about, /hreflang="en" href="[^"]*\/en\/about"/);
+test("every public route passes its matching locale to the shared view", () => {
+  for (const { locale, source } of expectedRoutes) {
+    const page = readFileSync(path.join(repoRoot, source), "utf8");
+    assert.match(page, new RegExp(`locale=["']${locale}["']`), `${source} should pass locale="${locale}"`);
+  }
+});
+
+test("the shared public layout renders lang and reciprocal hreflang metadata", () => {
+  const layout = readFileSync(path.join(repoRoot, "src/layouts/BaseLayout.astro"), "utf8");
+  assert.match(layout, /<html lang=\{locale\}>/);
+  assert.match(layout, /rel="alternate" hreflang="fr"/);
+  assert.match(layout, /rel="alternate" hreflang="en"/);
+  assert.match(layout, /rel="alternate" hreflang="x-default"/);
 });
