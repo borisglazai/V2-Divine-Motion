@@ -2,6 +2,8 @@
 import { getPath, type PageId } from "@/i18n/routes";
 import { t } from "@/i18n/ui";
 import Container from "./Container.astro";
+import { getDb } from "@/lib/db/client";
+import { getSiteSettings } from "@/lib/db/settings";
 
 interface Props {
   locale: "fr" | "en";
@@ -9,6 +11,22 @@ interface Props {
 
 const { locale } = Astro.props;
 const copy = t(locale);
+let brandName: string = copy.siteName;
+let contactEmail: string | null = null;
+let instagramUrl = "https://instagram.com";
+let instagramLabel: string = copy.footer.instagram;
+try {
+  const settings = await getSiteSettings(getDb());
+  if (settings) {
+    brandName = settings.brand_name;
+    contactEmail = settings.contact_email;
+    instagramUrl = settings.instagram_url;
+    instagramLabel = settings.instagram_handle_label;
+  }
+} catch (err) {
+  console.error("Footer: site_settings D1 read failed", err instanceof Error ? err.message : err);
+}
+const rights = copy.footer.rights.replace("Divine Motion", brandName);
 
 const links: { id: PageId; label: string }[] = [
   { id: "work", label: copy.nav.work },
@@ -21,7 +39,7 @@ const links: { id: PageId; label: string }[] = [
 <footer class="footer">
   <Container class="footer__inner" as="div">
     <div class="footer__top">
-      <span class="footer__wordmark">{copy.siteName}</span>
+      <span class="footer__wordmark">{brandName}</span>
 
       <nav>
         <ul class="footer__links">
@@ -32,13 +50,14 @@ const links: { id: PageId; label: string }[] = [
               </li>
             ))
           }
+          {contactEmail && <li><a href={`mailto:${contactEmail}`}>{contactEmail}</a></li>}
           <li>
             <a
-              href="https://instagram.com"
+              href={instagramUrl}
               rel="noopener noreferrer"
               target="_blank"
             >
-              {copy.footer.instagram}
+              {instagramLabel}
             </a>
           </li>
         </ul>
@@ -46,7 +65,7 @@ const links: { id: PageId; label: string }[] = [
     </div>
 
     <div class="footer__bottom">
-      <p>{copy.footer.rights}</p>
+      <p>{rights}</p>
       <a href={getPath("privacy", locale)}>{copy.footer.privacy}</a>
     </div>
   </Container>

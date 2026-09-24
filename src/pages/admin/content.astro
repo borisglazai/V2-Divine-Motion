@@ -1,11 +1,52 @@
 ---
 export const prerender = false;
 import AdminLayout from "@/layouts/AdminLayout.astro";
-import AdminPlaceholder from "@/components/admin/AdminPlaceholder.astro";
 
 const identity = Astro.locals.adminIdentity!;
 ---
 
 <AdminLayout activeId="content" title="Contenu" identity={identity}>
-  <AdminPlaceholder moduleName="Contenu" />
+  <p class="content-intro">Accédez rapidement à chaque zone éditable sans modifier la structure ni le design du site.</p>
+  <div class="content-grid">
+    <section>
+      <h2>Pages publiques</h2>
+      <p>Textes, images principales et aperçus dans le véritable design du site.</p>
+      <ul>
+        <li><a href="/admin/site">Accueil</a></li>
+        <li><a href="/admin/site/travail">Travail</a></li>
+        <li><a href="/admin/site/services">Services</a></li>
+        <li><a href="/admin/site/a-propos">À propos</a></li>
+        <li><a href="/admin/site/contact">Contact</a></li>
+      </ul>
+    </section>
+    <section>
+      <h2>Contenu structuré</h2>
+      <p>Collections réutilisées dans les pages publiques.</p>
+      <ul>
+        <li><a href="/admin/work">Projets Travail</a></li>
+        <li><a href="/admin/services">Services</a></li>
+        <li><a href="/admin/testimonials">Témoignages</a></li>
+        <li><a href="/admin/media">Médiathèque</a></li>
+      </ul>
+    </section>
+    <section>
+      <h2>Référencement et identité</h2>
+      <p>Métadonnées, coordonnées et valeurs globales.</p>
+      <ul>
+        <li><a href="/admin/seo">SEO</a></li>
+        <li><a href="/admin/settings">Paramètres</a></li>
+      </ul>
+    </section>
+  </div>
 </AdminLayout>
+
+<style>
+  .content-intro { color: var(--color-text-secondary); max-width: 48rem; margin-bottom: var(--space-6); }
+  .content-grid { display: grid; gap: var(--space-5); }
+  .content-grid section { padding: var(--space-5); background: var(--color-surface-admin); border: var(--border-width) solid var(--color-border); border-radius: var(--radius-md); }
+  .content-grid h2 { font-family: var(--font-serif); font-size: var(--text-h3); margin-bottom: var(--space-2); }
+  .content-grid p { color: var(--color-text-secondary); margin-bottom: var(--space-4); }
+  .content-grid ul { display: grid; gap: var(--space-3); }
+  .content-grid a { color: var(--color-text-primary); text-underline-offset: 0.2em; }
+  @media (min-width: 900px) { .content-grid { grid-template-columns: repeat(3, 1fr); } }
+</style>

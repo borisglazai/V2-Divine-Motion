@@ -54,11 +54,11 @@ Le lot SEO relie désormais `page_seo` aux pages publiques et fournit :
 
 La validation finale de ce lot reste soumise au build Cloudflare staging et au contrôle navigateur après déploiement.
 
-### 2.4 Paramètres et contenu CMS promis mais inachevés
+### 2.4 Paramètres et contenu CMS — corrigé dans le lot du 24 septembre 2026
 
-- `/admin/settings` est encore « Module en préparation », alors que `site_settings` et son DAL existent.
-- `/admin/content` est encore « Module en préparation ». Le Visual Editor couvre déjà le contenu principal; cette entrée doit soit devenir un point d'accès clair aux éditeurs structurés, soit être retirée de la navigation pour ne pas livrer un écran mort.
-- Les coordonnées publiques du footer ne lisent pas `site_settings`, ce qui maintient deux sources de vérité.
+- `/admin/settings` permet maintenant d’administrer l’identité, le contact, Instagram, les zones desservies et les valeurs SEO globales.
+- `/admin/content` est devenu un hub clair vers les cinq éditeurs visuels, les collections structurées, la médiathèque, le SEO et les paramètres.
+- Le footer lit désormais `site_settings` avec un repli sûr si D1 est indisponible; le nom de marque, le courriel et Instagram n’ont plus de seconde source codée en dur en fonctionnement normal.
 
 ### 2.5 QA finale non terminée
 
